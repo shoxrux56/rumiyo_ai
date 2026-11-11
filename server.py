@@ -125,6 +125,9 @@ def keys(kind):
     return list(dict.fromkeys(k for k in ks if isinstance(k, str) and k))
 
 
+LAST_ERR = [""]
+
+
 class Busy(Exception):
     pass
 
@@ -147,6 +150,7 @@ async def post(http, url, headers=None, **kw):
         txt = await r.text()
         if r.status != 200:   # sabab Render logida ko'rinsin (kalit yozilmaydi)
             print("HTTP", r.status, url.split("?")[0], txt[:240].replace("\n", " "))
+            LAST_ERR[0] = "%s %s %s" % (url.split("?")[0].split("//")[-1].split("/")[0][:24], r.status, txt[:140].replace("\n", " "))
         try:
             return r.status, json.loads(txt)
         except ValueError:
@@ -549,7 +553,7 @@ async def ai_turn(request):
             ru, uz, fix, wrap, emo = await reply_for(info, ses, dinfo, heard, left)
             audio = await tts_safe(ru) if ru else b""
     except Busy:
-        return web.json_response({"error": "Rumiyo hozir band. Bir oz kutib, qayta urinib ko'ring."}, status=429)
+        return web.json_response({"error": "Rumiyo hozir band. Bir oz kutib, qayta urinib ko'ring. [sabab: " + (LAST_ERR[0] or "noma'lum") + "]"}, status=429)
     except Exception as e:
         print("turn xato:", type(e).__name__, str(e)[:200])
         return web.json_response({"error": "Xatolik bo'ldi, vaqtingizdan hisoblanmadi. Qayta urinib ko'ring."}, status=500)
