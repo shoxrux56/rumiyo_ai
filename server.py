@@ -34,7 +34,7 @@ STT_MODELS = ["whisper-large-v3-turbo", "whisper-large-v3"]
 LLM_MODELS = [x.strip() for x in os.getenv("GROQ_MODELS", "openai/gpt-oss-120b,openai/gpt-oss-20b,llama-3.3-70b-versatile,llama-3.1-8b-instant").split(",") if x.strip()]
 OR_MODEL = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
-RU_VOICE = os.getenv("RU_VOICE", "ru-RU-DmitryNeural")   # boshqa: ru-RU-SvetlanaNeural, ru-RU-DariyaNeural
+RU_VOICE = os.getenv("RU_VOICE", "ru-RU-DariyaNeural")   # boshqa: ru-RU-SvetlanaNeural, ru-RU-DmitryNeural
 if not SECRET:
     raise SystemExit("TALK_SECRET yo'q (botdagi bilan bir xil bo'lsin)")
 
@@ -286,7 +286,7 @@ async def stt(raw, ctype):
     raise Busy("stt")
 
 
-PROSODY = {"angry": ("+16%", "+6Hz", "+25%"), "cry": ("-12%", "-6Hz", "-10%"), "happy": ("+6%", "+3Hz", "+0%"), "normal": ("+4%", "+0Hz", "+8%")}
+PROSODY = {"angry": ("+16%", "+6Hz", "+25%"), "cry": ("-12%", "-6Hz", "-10%"), "happy": ("+4%", "+4Hz", "+0%"), "normal": ("+0%", "+2Hz", "+0%")}
 
 
 async def tts(text, emo="normal"):
