@@ -146,7 +146,9 @@ def rotated(kind):
 
 
 async def post(http, url, headers=None, **kw):
-    async with http.post(url, headers=headers or {}, timeout=aiohttp.ClientTimeout(total=45), **kw) as r:
+    hd = {"User-Agent": "Mozilla/5.0 (compatible; RumiyoServer/1.0)"}
+    hd.update(headers or {})
+    async with http.post(url, headers=hd, timeout=aiohttp.ClientTimeout(total=45), **kw) as r:
         txt = await r.text()
         if r.status != 200:   # sabab Render logida ko'rinsin (kalit yozilmaydi)
             print("HTTP", r.status, url.split("?")[0], txt[:240].replace("\n", " "))
@@ -651,6 +653,52 @@ async def admin_stats(request):
                               "keys": {k: len(keys(k)) for k in ("groq", "openrouter", "gemini")}})
 
 
+async def admin_selftest(request):
+    """Bot «Tekshirish» tugmasi: har bir xizmatga kichik so'rov yuborib, javob kodini qaytaradi (kalitlar yozilmaydi)."""
+    if not is_admin(request):
+        return denied()
+    out = []
+    msgs = [{"role": "user", "content": "Say: ok"}]
+    async with aiohttp.ClientSession() as http:
+        for k in keys("groq")[:3]:
+            for m in LLM_MODELS:
+                try:
+                    st, j = await post(http, GROQ + "/chat/completions", {"Authorization": "Bearer " + k}, json={"model": m, "messages": msgs, "max_tokens": 5})
+                    out.append("Groq …%s %s: %s %s" % (k[-4:], m, st, "OK" if st == 200 else str(j)[:160]))
+                except Exception as e:
+                    out.append("Groq …%s %s: %s %s" % (k[-4:], m, type(e).__name__, str(e)[:100]))
+        if keys("groq"):
+            import io, wave
+            bio = io.BytesIO(); w = wave.open(bio, "wb"); w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000); w.writeframes(b"\x00\x00" * 16000); w.close()
+            for m in STT_MODELS:
+                try:
+                    form = aiohttp.FormData(); form.add_field("file", bio.getvalue(), filename="a.wav", content_type="audio/wav"); form.add_field("model", m)
+                    st, j = await post(http, GROQ + "/audio/transcriptions", {"Authorization": "Bearer " + keys("groq")[0]}, data=form)
+                    out.append("Groq ovoz→matn %s: %s %s" % (m, st, "OK" if st == 200 else str(j)[:160]))
+                except Exception as e:
+                    out.append("Groq ovoz→matn %s: %s %s" % (m, type(e).__name__, str(e)[:100]))
+        for k in keys("openrouter")[:2]:
+            try:
+                st, j = await post(http, OPENROUTER + "/chat/completions", {"Authorization": "Bearer " + k}, json={"model": OR_MODEL, "messages": msgs, "max_tokens": 5})
+                out.append("OpenRouter …%s: %s %s" % (k[-4:], st, "OK" if st == 200 else str(j)[:160]))
+            except Exception as e:
+                out.append("OpenRouter: %s" % type(e).__name__)
+        for k in keys("gemini")[:2]:
+            try:
+                st, j = await post(http, f"{GEMINI}/models/{GEMINI_MODEL}:generateContent?key={k}", json={"contents": [{"parts": [{"text": "Say ok"}]}]})
+                out.append("Gemini …%s: %s %s" % (k[-4:], st, "OK" if st == 200 else str(j)[:160]))
+            except Exception as e:
+                out.append("Gemini: %s" % type(e).__name__)
+    if not (keys("groq") or keys("openrouter") or keys("gemini")):
+        out.append("Serverda HECH QANDAY kalit yo'q (bot hali yubormagan)")
+    try:
+        a = await tts("Привет")
+        out.append("Ovoz (TTS): OK %d bayt" % len(a))
+    except Exception as e:
+        out.append("Ovoz (TTS): XATO %s %s" % (type(e).__name__, str(e)[:100]))
+    return web.json_response({"lines": out})
+
+
 PAGE = next((os.path.join(HERE, f) for f in ("rumiyo.html", "index.html") if os.path.exists(os.path.join(HERE, f))), os.path.join(HERE, "index.html"))
 
 
@@ -670,6 +718,7 @@ def add_routes(app, prefix=""):
     app.router.add_get(p + "/admin/export", admin_export)
     app.router.add_post(p + "/admin/keys", admin_keys)
     app.router.add_get(p + "/admin/stats", admin_stats)
+    app.router.add_get(p + "/admin/selftest", admin_selftest)
     app.router.add_get(p + "/", page)
     media = os.path.join(HERE, "media")
     if os.path.isdir(media):
