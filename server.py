@@ -34,7 +34,7 @@ STT_MODELS = ["whisper-large-v3-turbo", "whisper-large-v3"]
 LLM_MODELS = [x.strip() for x in os.getenv("GROQ_MODELS", "openai/gpt-oss-120b,openai/gpt-oss-20b,llama-3.3-70b-versatile,llama-3.1-8b-instant").split(",") if x.strip()]
 OR_MODEL = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
-RU_VOICE = os.getenv("RU_VOICE", "ru-RU-SvetlanaNeural")
+RU_VOICE = os.getenv("RU_VOICE", "ru-RU-DmitryNeural")   # boshqa: ru-RU-SvetlanaNeural, ru-RU-DariyaNeural
 if not SECRET:
     raise SystemExit("TALK_SECRET yo'q (botdagi bilan bir xil bo'lsin)")
 
@@ -286,10 +286,14 @@ async def stt(raw, ctype):
     raise Busy("stt")
 
 
-async def tts(text):
+PROSODY = {"angry": ("+16%", "+6Hz", "+25%"), "cry": ("-12%", "-6Hz", "-10%"), "happy": ("+6%", "+3Hz", "+0%"), "normal": ("+4%", "+0Hz", "+8%")}
+
+
+async def tts(text, emo="normal"):
+    pr = PROSODY.get(emo, PROSODY["normal"])
     import edge_tts
     out = b""
-    async for ch in edge_tts.Communicate(text, RU_VOICE, rate="+0%").stream():
+    async for ch in edge_tts.Communicate(text, RU_VOICE, rate=pr[0], pitch=pr[1], volume=pr[2]).stream():
         if ch["type"] == "audio":
             out += ch["data"]
     if not out:
@@ -297,10 +301,10 @@ async def tts(text):
     return out
 
 
-async def tts_safe(text):
+async def tts_safe(text, emo="normal"):
     """Ovoz chiqmasa ham javob matni yo'qolmasin (Microsoft TTS vaqtincha ishlamasa)."""
     try:
-        return await tts(text)
+        return await tts(text, emo)
     except Exception as e:
         print("TTS xato:", type(e).__name__, str(e)[:120])
         return b""
@@ -528,7 +532,7 @@ async def ai_start(request):
     try:
         async with gate:
             ru, uz, _fix, _w, emo = await reply_for(info, ses, dinfo, opener, left)
-            audio = await tts_safe(ru) if ru else b""
+            audio = await tts_safe(ru, emo) if ru else b""
     except Exception as e:
         print("start:", type(e).__name__, str(e)[:160])
         ru, uz, audio, emo = "Привет! Я Румиё. Давай поболтаем про сегодняшний урок!", "Salom! Men Rumiyoman. Keling, bugungi dars haqida gaplashamiz!", b"", "normal"
@@ -560,7 +564,7 @@ async def ai_turn(request):
             if not heard:
                 return web.json_response({"error": "Ovozni eshita olmadim. Aniqroq gapiring."}, status=422)
             ru, uz, fix, wrap, emo = await reply_for(info, ses, dinfo, heard, left)
-            audio = await tts_safe(ru) if ru else b""
+            audio = await tts_safe(ru, emo) if ru else b""
     except Busy:
         return web.json_response({"error": "Rumiyo hozir band. Bir oz kutib, qayta urinib ko'ring. [sabab: " + (LAST_ERR[0] or "noma'lum") + "]"}, status=429)
     except Exception as e:
