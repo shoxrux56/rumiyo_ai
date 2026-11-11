@@ -31,7 +31,7 @@ GROQ = os.getenv("GROQ_BASE", "https://api.groq.com/openai/v1")
 OPENROUTER = os.getenv("OPENROUTER_BASE", "https://openrouter.ai/api/v1")
 GEMINI = os.getenv("GEMINI_BASE", "https://generativelanguage.googleapis.com/v1beta")
 STT_MODELS = ["whisper-large-v3-turbo", "whisper-large-v3"]
-LLM_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+LLM_MODELS = [x.strip() for x in os.getenv("GROQ_MODELS", "llama-3.3-70b-versatile,llama-3.1-8b-instant").split(",") if x.strip()]
 OR_MODEL = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 RU_VOICE = os.getenv("RU_VOICE", "ru-RU-SvetlanaNeural")
@@ -145,6 +145,8 @@ def rotated(kind):
 async def post(http, url, headers=None, **kw):
     async with http.post(url, headers=headers or {}, timeout=aiohttp.ClientTimeout(total=45), **kw) as r:
         txt = await r.text()
+        if r.status != 200:   # sabab Render logida ko'rinsin (kalit yozilmaydi)
+            print("HTTP", r.status, url.split("?")[0], txt[:240].replace("\n", " "))
         try:
             return r.status, json.loads(txt)
         except ValueError:

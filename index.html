@@ -45,7 +45,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 </head>
 <body>
 
-<section id="s-msg" class="scr hide"><div class="mid"><div class="emoji">🤷</div><h1 id="msg-t"></h1><p id="msg-p" class="lead"></p></div></section>
+<section id="s-msg" class="scr hide"><div class="mid"><div class="emoji">🤷</div><h1 id="msg-t"></h1><p id="msg-p" class="lead"></p><button id="b-ext" class="btn" hidden>🌐 Brauzerda ochish</button></div></section>
 
 <section id="s-hello" class="scr hide">
   <div class="mid">
@@ -77,6 +77,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
   </div>
 </section>
 
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
 (function () {
   "use strict";
@@ -85,6 +86,9 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
   var botUrl = "https://t.me/rumiyo_bot";
   var mic = null, recorder = null, chunks = [], rec = false, busy = false, audio = null, tick = null, left = 0, ctx = null;
 
+  function noMic(t, p) {
+    $("msg-t").textContent = t; $("msg-p").textContent = p; $("b-ext").hidden = false; show("s-msg");
+  }
   function show(id) { ["s-msg", "s-hello", "s-chat", "s-end"].forEach(function (s) { $(s).classList.toggle("hide", s !== id); }); }
   function state(t) { $("state").textContent = t; }
   function fmt(s) { s = Math.max(0, s | 0); return Math.floor(s / 60) + ":" + ("0" + (s % 60)).slice(-2); }
@@ -94,8 +98,12 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
     if (sub) { var s = document.createElement("small"); s.textContent = sub; d.appendChild(s); }
     $("log").appendChild(d); $("log").scrollTop = 1e9;
   }
+  var playRes = null, speaking = false;
   function play(b64, txt) {
-    return new Promise(function (res) {
+    return new Promise(function (res0) {
+      var done = false;
+      var res = function () { if (done) return; done = true; playRes = null; res0(); };
+      playRes = res;
       if (!b64) return setTimeout(res, Math.min(6000, 1200 + (txt || "").length * 60));   // ovoz bo'lmasa ham hissiyat videosi ko'rinib tursin
       try {
         if (audio) audio.pause();
@@ -105,6 +113,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
       } catch (e) { res(); }
     });
   }
+  function stopSpeak() { try { if (audio) audio.pause(); } catch (e) {} if (playRes) playRes(); }
   function post(path, opts) { return fetch(path, opts).then(function (r) { return r.json().then(function (j) { j._st = r.status; return j; }); }); }
   function stopMic() { if (mic) { mic.getTracks().forEach(function (t) { t.stop(); }); mic = null; } }
 
@@ -130,7 +139,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 
   function begin() {
     if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) || !window.MediaRecorder) {
-      $("msg-t").textContent = "Brauzer mos emas"; $("msg-p").textContent = "Telegramning o'zida emas, Chrome yoki Safari'da oching."; return show("s-msg");
+      return noMic("Mikrofon bu yerda ishlamaydi", "Telegram ichida mikrofon ochilmadi. Pastdagi tugma bilan Chrome yoki Safari'da oching.");
     }
     navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(function (s) {
       mic = s; $("log").innerHTML = ""; show("s-chat"); setAv("idle"); state("Rumiyo o'ylayapti…"); $("b-mic").disabled = true;
@@ -140,10 +149,11 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
         if (j.bot) botUrl = j.bot;
         $("c-topic").textContent = j.topic ? "Mavzu: " + j.topic : "";
         setLeft(j.left); log("ai", j.ru, j.uz); setAv(emoClip(j.emo));
-        return play(j.audio, j.ru).then(function () { setAv("idle"); $("b-mic").disabled = false; state("Tugmani bosib ruscha javob bering"); });
+        speaking = true; $("b-mic").disabled = false; state("Gapirish uchun tugmani bosing (Rumiyo to'xtaydi)");
+        return play(j.audio, j.ru).then(function () { speaking = false; if (rec) return; setAv("idle"); $("b-mic").disabled = false; state("Tugmani bosib ruscha javob bering"); });
       }).catch(function () { state("Aloqa xatosi. Sahifani yangilang."); });
     }).catch(function () {
-      $("msg-t").textContent = "Mikrofon yopiq"; $("msg-p").textContent = "Brauzer sozlamasidan mikrofonga ruxsat bering va qayta oching."; show("s-msg");
+      noMic("Mikrofon yopiq", "Mikrofonga ruxsat bering. Telegramda ishlamasa, pastdagi tugma bilan brauzerda oching.");
     });
   }
 
@@ -157,6 +167,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
   function micToggle() {
     if (busy || !mic) return;
     if (rec) return stopRec();
+    if (speaking) { speaking = false; stopSpeak(); }
     var mime = pickMime();
     try { recorder = new MediaRecorder(mic, mime ? { mimeType: mime } : undefined); } catch (e) { return state("Mikrofon ishlamadi"); }
     chunks = []; var t0 = Date.now(), spoke = false, silent = 0, timer = null;
@@ -190,18 +201,25 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
         if (j.error) { busy = false; $("b-mic").disabled = false; return state(j.error + " Tugmani bosing"); }
         log("me", j.heard); if (j.fix) log("fix", "✏️ " + j.fix);
         log("ai", j.ru, j.uz); setLeft(j.left); setAv(emoClip(j.emo));
+        busy = false;
+        if (!j.done) { speaking = true; $("b-mic").disabled = false; state("Gapirish uchun tugmani bosing (Rumiyo to'xtaydi)"); }
         return play(j.audio, j.ru).then(function () {
-          setAv("idle");
-          busy = false;
+          speaking = false;
           if (j.done) return finish(j);
-          $("b-mic").disabled = false; state("Tugmani bosib javob bering");
+          if (rec) return;
+          setAv("idle"); $("b-mic").disabled = false; state("Tugmani bosib javob bering");
         });
       }).catch(function () { busy = false; $("b-mic").disabled = false; state("Aloqa xatosi. Tugmani qayta bosing"); });
   }
 
+  $("b-ext").onclick = function () {
+    try { if (window.Telegram && Telegram.WebApp && Telegram.WebApp.openLink) return Telegram.WebApp.openLink(location.href, { try_instant_view: false }); } catch (e) {}
+    window.open(location.href, "_blank");
+  };
+  try { if (window.Telegram && Telegram.WebApp) { Telegram.WebApp.ready(); Telegram.WebApp.expand(); } } catch (e) {}
   $("b-go").onclick = begin; $("b-mic").onclick = micToggle;
   $("b-end").onclick = function () {
-    if (audio) audio.pause(); stopRec();
+    speaking = false; stopSpeak(); stopRec();
     fetch("ai/end", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token }) }).catch(function () {});
     finish({ cta: "Yaxshi gaplashdik! Botga qayting 👇" });
   };
