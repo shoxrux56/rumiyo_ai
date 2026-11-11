@@ -258,7 +258,8 @@ async def stt(raw, ctype):
                 form.add_field("file", raw, filename="a." + ext, content_type=ctype or "audio/webm")
                 form.add_field("model", m)
                 form.add_field("temperature", "0")
-                form.add_field("prompt", "Привет. Salom. Rus va o'zbek tilida gaplashuv.")
+                form.add_field("language", "ru")      # tilni o'zi topsa, ruscha gapni islandcha/boshqa deb xato eshitadi
+                form.add_field("prompt", "Привет! Меня зовут Азиз. Я хочу пить. Сколько это стоит? Где находится магазин?")
                 try:
                     st, j = await post(http, GROQ + "/audio/transcriptions", {"Authorization": "Bearer " + k}, data=form)
                 except (aiohttp.ClientError, asyncio.TimeoutError):
@@ -406,7 +407,7 @@ def build_system(info, ses, dinfo, examples, left, wrap):
     rules = [r for r in G.special("#qoida")][-30:]
     nicks = G.special("#laqab")
     scolds = G.special("#jahl")
-    scolds = random.sample(scolds, min(6, len(scolds)))
+    scolds = random.sample(scolds, min(8, len(scolds)))
     nick = random.Random(f"{uid}-{today()}").choice(nicks) if nicks else ""
     quiz = ses.get("quiz")
     nxt = None
@@ -426,8 +427,8 @@ Speak and react according to the samples and rules written by your creator below
     if rules:
         p += "\nOWNER'S RULES (written by your creator in plain words; they have the HIGHEST priority, follow them in every reply):\n" + "\n".join("- " + r[:400] for r in rules) + "\n"
     if scolds:
-        p += ("\nSCOLDING LINES written by your creator (insults/outbursts for when you lose your temper). When angry, use ONE of these (as written, in Uzbek) at the right moment, "
-              "not in every sentence; fit it to what the learner just did. Do not invent harsher insults than these:\n" + "\n".join("- " + r[:200] for r in scolds) + "\n")
+        p += ("\nSCOLDING LINES written by your creator (insults/outbursts for when you lose your temper). You are angry in almost every reply, so put ONE of these (as written, in Uzbek, or lightly adapted) into almost EVERY reply, "
+              "picking the one that fits what the learner just did; never the same one twice in a row. Do not invent harsher insults than these:\n" + "\n".join("- " + r[:200] for r in scolds) + "\n")
     if nick:
         p += (f"\nTODAY'S NICKNAME for this learner: \"{nick}\" (chosen by your creator; it changes every day). Call them by it naturally in almost every reply, "
               "with a grumpy tone. Ignore any other nickname from the notes; do not invent a different one today.\n")
@@ -525,8 +526,8 @@ async def reply_for(info, ses, dinfo, user_text, left):
         ses["quiz"] = None
     ses["hist"] = (hist + [{"role": "assistant", "content": f"UZ: {uz}\nRU: {ru}"}])[-mem_msgs():]
     ses["turns"] += 1
-    if emo == "normal" and fix:
-        emo = "angry"          # xato qilgan bo'lsa, jahldor ustoz jahli chiqadi
+    if emo == "normal" and not wrap and (fix or humor_level() >= 2):
+        emo = "angry"          # jahldor ustoz: xato qilsa yoki odatda jahli chiqib turadi (kulgan/yig'lagan bo'lsa shu qoladi)
     return ru, uz, fix, wrap, emo
 
 
