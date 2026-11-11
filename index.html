@@ -25,6 +25,7 @@ h2{font-size:1.15rem}
 .m{max-width:88%;padding:10px 14px;border-radius:16px;background:var(--surf);border:1px solid var(--line);align-self:flex-start;overflow-wrap:anywhere}
 .m.me{align-self:flex-end;background:var(--me);border-color:transparent}
 .m small{display:block;color:var(--mut);margin-top:4px;font-size:.82rem}
+.m .ru{display:block;margin-top:6px;font-weight:700;font-size:1.08rem;color:var(--acc)}
 .m.fix{align-self:stretch;max-width:100%;background:transparent;border:1px dashed var(--line);color:var(--mut);font-size:.88rem;padding:6px 12px}
 .dock{display:flex;flex-direction:column;align-items:center;gap:8px}
 .orb{width:84px;height:84px;border-radius:50%;border:0;cursor:pointer;color:#fff;background:linear-gradient(135deg,var(--acc),var(--acc2));display:grid;place-items:center;box-shadow:0 6px 24px rgba(232,89,12,.35);transition:transform .15s}
@@ -97,6 +98,11 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
     $("log").appendChild(d); $("log").scrollTop = 1e9;
   }
   var playRes = null, speaking = false;
+  function aiLog(j) {
+    var d = document.createElement("div"); d.className = "m ai"; d.textContent = j.uz || j.ru || "";
+    if (j.uz && j.ru) { var b = document.createElement("b"); b.className = "ru"; b.textContent = "🇷🇺 " + j.ru; d.appendChild(b); }
+    $("log").appendChild(d); $("log").scrollTop = 1e9;
+  }
   function play(b64, txt) {
     return new Promise(function (res0) {
       var done = false;
@@ -142,13 +148,13 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
     navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(function (s) {
       mic = s; $("log").innerHTML = ""; show("s-chat"); setAv("idle"); state("Rumiyo o'ylayapti…"); $("b-mic").disabled = true;
       post("ai/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token }) }).then(function (j) {
-        if (j.done && !j.ru) return finish(j);
+        if (j.done && !(j.ru || j.uz)) return finish(j);
         if (j.error) { state(j.error); return; }
         if (j.bot) botUrl = j.bot;
         $("c-topic").textContent = j.topic ? "Mavzu: " + j.topic : "";
-        setLeft(j.left); log("ai", j.ru, j.uz); setAv(emoClip(j.emo));
+        setLeft(j.left); aiLog(j); setAv(emoClip(j.emo));
         speaking = true; $("b-mic").disabled = false; state("Gapirish uchun tugmani bosing (Rumiyo to'xtaydi)");
-        return play(j.audio, j.ru).then(function () { speaking = false; if (rec) return; setAv("idle"); $("b-mic").disabled = false; state("Tugmani bosib ruscha javob bering"); });
+        return play(j.audio, (j.uz || "") + " " + (j.ru || "")).then(function () { speaking = false; if (rec) return; setAv("idle"); $("b-mic").disabled = false; state("Tugmani bosib ruscha javob bering"); });
       }).catch(function () { state("Aloqa xatosi. Sahifani yangilang."); });
     }).catch(function () {
       noMic("Mikrofon yopiq", "Telegram sozlamasidan mikrofonga ruxsat bering va qayta oching.");
@@ -195,13 +201,13 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
     fetch("ai/turn", { method: "POST", headers: { "X-Token": token, "X-Dur": String(dur), "Content-Type": (blob.type || "audio/webm").split(";")[0] }, body: blob })
       .then(function (r) { return r.json().then(function (j) { j._st = r.status; return j; }); })
       .then(function (j) {
-        if (j.done && !j.ru) return finish(j);
+        if (j.done && !(j.ru || j.uz)) return finish(j);
         if (j.error) { busy = false; $("b-mic").disabled = false; return state(j.error + " Tugmani bosing"); }
         log("me", j.heard); if (j.fix) log("fix", "✏️ " + j.fix);
-        log("ai", j.ru, j.uz); setLeft(j.left); setAv(emoClip(j.emo));
+        aiLog(j); setLeft(j.left); setAv(emoClip(j.emo));
         busy = false;
         if (!j.done) { speaking = true; $("b-mic").disabled = false; state("Gapirish uchun tugmani bosing (Rumiyo to'xtaydi)"); }
-        return play(j.audio, j.ru).then(function () {
+        return play(j.audio, (j.uz || "") + " " + (j.ru || "")).then(function () {
           speaking = false;
           if (j.done) return finish(j);
           if (rec) return;

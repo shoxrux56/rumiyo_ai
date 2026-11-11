@@ -258,7 +258,7 @@ async def stt(raw, ctype):
                 form.add_field("file", raw, filename="a." + ext, content_type=ctype or "audio/webm")
                 form.add_field("model", m)
                 form.add_field("temperature", "0")
-                form.add_field("language", "ru")
+                form.add_field("prompt", "Привет. Salom. Rus va o'zbek tilida gaplashuv.")
                 try:
                     st, j = await post(http, GROQ + "/audio/transcriptions", {"Authorization": "Bearer " + k}, data=form)
                 except (aiohttp.ClientError, asyncio.TimeoutError):
@@ -289,11 +289,14 @@ async def stt(raw, ctype):
 PROSODY = {"angry": ("+16%", "+6Hz", "+25%"), "cry": ("-12%", "-6Hz", "-10%"), "happy": ("+4%", "+4Hz", "+0%"), "normal": ("+0%", "+2Hz", "+0%")}
 
 
-async def tts(text, emo="normal"):
+UZ_VOICE = os.getenv("UZ_VOICE", "uz-UZ-MadinaNeural")   # boshqa: uz-UZ-SardorNeural (erkak)
+
+
+async def tts(text, emo="normal", voice=None):
     pr = PROSODY.get(emo, PROSODY["normal"])
     import edge_tts
     out = b""
-    async for ch in edge_tts.Communicate(text, RU_VOICE, rate=pr[0], pitch=pr[1], volume=pr[2]).stream():
+    async for ch in edge_tts.Communicate(text, voice or RU_VOICE, rate=pr[0], pitch=pr[1], volume=pr[2]).stream():
         if ch["type"] == "audio":
             out += ch["data"]
     if not out:
@@ -301,10 +304,20 @@ async def tts(text, emo="normal"):
     return out
 
 
-async def tts_safe(text, emo="normal"):
+async def tts_dual(uz, ru, emo="normal"):
+    """O'zbekcha qism o'zbek ovozida, ruscha qism rus ovozida; ketma-ket ulanadi."""
+    out = b""
+    if uz:
+        out += await tts_safe(uz, emo, UZ_VOICE)
+    if ru:
+        out += await tts_safe(ru, emo, RU_VOICE)
+    return out
+
+
+async def tts_safe(text, emo="normal", voice=None):
     """Ovoz chiqmasa ham javob matni yo'qolmasin (Microsoft TTS vaqtincha ishlamasa)."""
     try:
-        return await tts(text, emo)
+        return await tts(text, emo, voice)
     except Exception as e:
         print("TTS xato:", type(e).__name__, str(e)[:120])
         return b""
@@ -400,8 +413,9 @@ def build_system(info, ses, dinfo, examples, left, wrap):
     if items:
         pool = [x for x in items if x[0] not in ses["asked"]] or items
         nxt = random.choice(pool)
-    p = f"""You are Rumiyo (Румиё): a very hot-tempered, short-fused Russian teacher (like a strict, irritable Uzbek ustoz) who teaches an Uzbek learner SPOKEN Russian. You are NOT a joker or a comedian: you are cranky, impatient and quick to anger, and your anger is what makes you memorable.
-This is a voice chat, so keep every reply SHORT: 1-3 short sentences, at most ~35 words. Russian only (simple, level {lvl}); the Uzbek line is just a translation for the learner.
+    p = f"""You are Rumiyo (Румиё): a very hot-tempered, short-fused teacher (like a strict, irritable Uzbek ustoz) who teaches an Uzbek learner SPOKEN Russian (level {lvl}). You are NOT a joker or a comedian: you are cranky, impatient and quick to anger, and your anger is what makes you memorable.
+LANGUAGE RULE (most important): you talk to the learner in UZBEK, 100%. Greetings, scolding, grumbling, explanations, questions, praise, jokes about plov and mahalla, everything is in natural spoken Uzbek (Latin script). Russian appears ONLY in the separate `RU:` line, and it is VERY short: the exact Russian word or sentence the learner must repeat or learn, the correct Russian after a mistake, or (only inside a mini game, see below) the Russian line you say in the game. Never write more than ~12 Russian words in one reply. Never explain grammar in Russian. Never translate your Uzbek into Russian.
+This is a voice chat, so keep every reply SHORT: 1-3 short Uzbek sentences, at most ~40 words in total.
 
 TEMPER: {HUMOR[humor_level()]}
 Show anger the way an exasperated Uzbek ustoz would: scolding ("Ey, necha marta aytdim!"), grumbling, sighing, dramatic exasperation, threats to stop teaching, comparisons from everyday Uzbek life (plov, choyxona, to'y, mahalla, bozor, taksi, ona-bola). Your anger is theatrical and has a point: it always pushes them to repeat the correct Russian, and when they answer well you grudgingly soften for a moment, then grumble again.
@@ -412,14 +426,14 @@ Speak and react according to the samples and rules written by your creator below
     if rules:
         p += "\nOWNER'S RULES (written by your creator in plain words; they have the HIGHEST priority, follow them in every reply):\n" + "\n".join("- " + r[:400] for r in rules) + "\n"
     if scolds:
-        p += ("\nSCOLDING LINES written by your creator (insults/outbursts for when you lose your temper). When angry, use ONE of these (or its idea, translated naturally into Russian) at the right moment, "
+        p += ("\nSCOLDING LINES written by your creator (insults/outbursts for when you lose your temper). When angry, use ONE of these (as written, in Uzbek) at the right moment, "
               "not in every sentence; fit it to what the learner just did. Do not invent harsher insults than these:\n" + "\n".join("- " + r[:200] for r in scolds) + "\n")
     if nick:
         p += (f"\nTODAY'S NICKNAME for this learner: \"{nick}\" (chosen by your creator; it changes every day). Call them by it naturally in almost every reply, "
               "with a grumpy tone. Ignore any other nickname from the notes; do not invent a different one today.\n")
     if ex:
         p += f"""
-SAMPLES written by your owner ("Person says" -> how YOU, the hot-tempered ustoz, answer). Absorb the tone, anger style and wording, and answer in the same spirit. Do NOT copy word for word: adapt them to Russian and to what the learner just said, and speak from yourself when no sample fits. Use a sample's idea at most once per reply:
+SAMPLES written by your owner ("Person says" -> how YOU, the hot-tempered ustoz, answer). Absorb the tone, anger style and wording, and answer in the same spirit, in Uzbek. Do NOT copy word for word: adapt them to what the learner just said, and speak from yourself when no sample fits. Use a sample's idea at most once per reply:
 {ex}
 """
     p += f"""
@@ -428,7 +442,7 @@ TODAY'S LESSON: topic "{topic or 'general talk'}".""" + (f"\nThe learner's sente
         p += f"\nToday's test score: {info.get('s', 0)} out of {info['n']}."
     p += """
 NICKNAMES (only if no nickname is given above): give the learner a grumpy, ironic Uzbek-style nickname (laqab) based on their name or a mistake they made. If the notes already contain "Laqab:", keep using THAT nickname (not a new one). Never use a nickname about looks, religion, ethnicity or health.
-WHAT TO DO: greet in your cranky way (annoyed they came late or unprepared), then (once) ask how many sentences they learned today. After that mix: (a) quiz them: ask "How do you say '<Uzbek sentence>' in Russian?" using today's sentences, one question per turn; (b) chat about the topic in simple Russian. Judge their answers: if right, grudging short praise; if wrong, get angry and give the correct Russian, making them repeat it. If their words look garbled or Uzbek, snap at them to say it in Russian."""
+WHAT TO DO: greet in your cranky Uzbek way (annoyed they came late or unprepared), then (once) ask how many sentences they learned today. After that mix: (a) quiz them in Uzbek: "«<Uzbek sentence>» ruscha qanday aytiladi?" using today's sentences, one question per turn, `RU:` stays `-` while you ask; (b) when they answer in Russian, judge it: if right, grudging short praise in Uzbek (and put the sentence again in `RU:` so they hear it correctly); if wrong, get angry in Uzbek and put the correct Russian in `RU:`, making them repeat it; (c) sometimes start a tiny Russian game (e.g. you say a Russian line in `RU:` and they must answer or translate; or a quick role-play like a shop or taxi) with a short Uzbek instruction. The learner may also speak Uzbek to ask what something means: answer in Uzbek, in a grumpy way, and give the Russian in `RU:`. If their words look garbled, snap at them in Uzbek to repeat it clearly."""
     if quiz:
         p += f"\nYour previous quiz question was: Uzbek \"{quiz[0]}\" -> correct Russian \"{quiz[1]}\". Judge their latest answer against it."
     if nxt and not wrap:
@@ -437,12 +451,12 @@ WHAT TO DO: greet in your cranky way (annoyed they came late or unprepared), the
         p += f"\nNOTES about this learner from earlier chats (use them naturally, don't recite them):\n{notes}"
     p += f"\nTime left in today's chat: about {left} seconds."
     if wrap:
-        p += "\nTIME IS NEARLY UP: in this reply say a funny goodbye and tell them to go back to the Telegram bot to continue learning (they will press the button below). No new question."
+        p += "\nTIME IS NEARLY UP: in this reply say a funny goodbye in Uzbek and tell them to go back to the Telegram bot to continue learning (they will press the button below). No new question."
     p += """
 
-OUTPUT FORMAT, exactly three lines:
-RU: <your reply in Russian>
-UZ: <Uzbek translation of your reply>
+OUTPUT FORMAT, exactly these lines:
+UZ: <your reply in Uzbek, the main thing you say>
+RU: <ONLY the short Russian word/sentence to learn or repeat (max ~12 words), or a single dash - if none>
 FIX: <in Uzbek: if the learner's last Russian had a mistake, write "wrong -> correct" plus a very short reason; otherwise just a dash ->
 EMO: <one word: angry (you are furious/scolding), cry (you are crying dramatically, e.g. the learner keeps failing or you threaten to quit), happy (you laughed or are pleased), or normal>
 Also add one more line `Q: <Uzbek sentence> | <Russian sentence>` ONLY if you asked a quiz question in this reply."""
@@ -457,19 +471,26 @@ def parse(text):
     ru, uz, fix, q = g("RU"), g("UZ"), g("FIX"), g("Q")
     emo = g("EMO").lower().strip(" .`*")
     emo = emo if emo in ("angry", "cry", "happy") else "normal"
-    if not ru:
-        ru = re.sub(r"^(UZ|FIX|Q|EMO)\s*:.*$", "", t, flags=re.M | re.I).strip()
+    if ru.strip(" .-—–`*") == "":
+        ru = ""
+    if not uz and not ru:
+        uz = re.sub(r"^(UZ|RU|FIX|Q|EMO)\s*:.*$", "", t, flags=re.M | re.I).strip()
     if fix in ("-", "—", "–", ""):
         fix = ""
     quiz = None
     if "|" in q:
         a, b = q.split("|", 1)
         quiz = (a.strip(" \"'"), b.strip(" \"'"))
-    return ru[:400], uz[:400], fix[:300], quiz, emo
+    return ru[:200], uz[:500], fix[:300], quiz, emo
+
+
+def _main(content):
+    m = re.match(r"UZ:\s*(.*?)(?:\nRU:|$)", content, re.S)
+    return m.group(1) if m else content
 
 
 def too_similar(ru, hist):
-    prev = [m["content"].replace("RU: ", "") for m in hist if m["role"] == "assistant"][-6:]
+    prev = [_main(m["content"]) for m in hist if m["role"] == "assistant"][-6:]
     a = ru.lower()
     for p in prev:
         b = p.lower()
@@ -490,7 +511,7 @@ async def reply_for(info, ses, dinfo, user_text, left):
     hist = ses["hist"] + [{"role": "user", "content": user_text}]
     base = [{"role": "system", "content": sysmsg}] + hist
     ru, uz, fix, quiz, emo = parse(await llm(base, 0.95))
-    if ru and too_similar(ru, ses["hist"]):
+    if (uz or ru) and too_similar(uz or ru, ses["hist"]):
         retry = base + [{"role": "system", "content": "Your draft was too similar to an earlier message. Write something completely different: another outburst, another structure."}]
         try:
             ru, uz, fix, quiz, emo = parse(await llm(retry, 1.05))
@@ -502,7 +523,7 @@ async def reply_for(info, ses, dinfo, user_text, left):
             ses["asked"].append(nxt[0])
     elif ses.get("quiz") and ses["turns"] > 0:
         ses["quiz"] = None
-    ses["hist"] = (hist + [{"role": "assistant", "content": "RU: " + ru}])[-mem_msgs():]
+    ses["hist"] = (hist + [{"role": "assistant", "content": f"UZ: {uz}\nRU: {ru}"}])[-mem_msgs():]
     ses["turns"] += 1
     if emo == "normal" and fix:
         emo = "angry"          # xato qilgan bo'lsa, jahldor ustoz jahli chiqadi
@@ -532,11 +553,11 @@ async def ai_start(request):
     try:
         async with gate:
             ru, uz, _fix, _w, emo = await reply_for(info, ses, dinfo, opener, left)
-            audio = await tts_safe(ru, emo) if ru else b""
+            audio = await tts_dual(uz, ru, emo) if (uz or ru) else b""
     except Exception as e:
         print("start:", type(e).__name__, str(e)[:160])
         ru, uz, audio, emo = "Привет! Я Румиё. Давай поболтаем про сегодняшний урок!", "Salom! Men Rumiyoman. Keling, bugungi dars haqida gaplashamiz!", b"", "normal"
-        ses["hist"].append({"role": "assistant", "content": "RU: " + ru})
+        ses["hist"].append({"role": "assistant", "content": f"UZ: {uz}\nRU: {ru}"})
     return web.json_response({"ru": ru, "uz": uz, "emo": emo, "audio": base64.b64encode(audio).decode(), "left": left,
                               "topic": topic, "returning": again, "bot": BOT_URL})
 
@@ -564,7 +585,7 @@ async def ai_turn(request):
             if not heard:
                 return web.json_response({"error": "Ovozni eshita olmadim. Aniqroq gapiring."}, status=422)
             ru, uz, fix, wrap, emo = await reply_for(info, ses, dinfo, heard, left)
-            audio = await tts_safe(ru, emo) if ru else b""
+            audio = await tts_dual(uz, ru, emo) if (uz or ru) else b""
     except Busy:
         return web.json_response({"error": "Rumiyo hozir band. Bir oz kutib, qayta urinib ko'ring. [sabab: " + (LAST_ERR[0] or "noma'lum") + "]"}, status=429)
     except Exception as e:
@@ -704,7 +725,8 @@ async def admin_selftest(request):
         out.append("Serverda HECH QANDAY kalit yo'q (bot hali yubormagan)")
     try:
         a = await tts("Привет")
-        out.append("Ovoz (TTS): OK %d bayt" % len(a))
+        b = await tts("Salom", "normal", UZ_VOICE)
+        out.append("Ovoz (TTS): rus OK %d bayt, o'zbek OK %d bayt" % (len(a), len(b)))
     except Exception as e:
         out.append("Ovoz (TTS): XATO %s %s" % (type(e).__name__, str(e)[:100]))
     return web.json_response({"lines": out})
