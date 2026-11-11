@@ -31,7 +31,7 @@ GROQ = os.getenv("GROQ_BASE", "https://api.groq.com/openai/v1")
 OPENROUTER = os.getenv("OPENROUTER_BASE", "https://openrouter.ai/api/v1")
 GEMINI = os.getenv("GEMINI_BASE", "https://generativelanguage.googleapis.com/v1beta")
 STT_MODELS = ["whisper-large-v3-turbo", "whisper-large-v3"]
-LLM_MODELS = [x.strip() for x in os.getenv("GROQ_MODELS", "llama-3.3-70b-versatile,llama-3.1-8b-instant").split(",") if x.strip()]
+LLM_MODELS = [x.strip() for x in os.getenv("GROQ_MODELS", "openai/gpt-oss-120b,openai/gpt-oss-20b,llama-3.3-70b-versatile,llama-3.1-8b-instant").split(",") if x.strip()]
 OR_MODEL = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 RU_VOICE = os.getenv("RU_VOICE", "ru-RU-SvetlanaNeural")
@@ -164,13 +164,20 @@ async def llm_groq(http, msgs, temp):
     for k in rotated("groq"):
         for m in LLM_MODELS:
             try:
-                st, j = await post(http, GROQ + "/chat/completions", {"Authorization": "Bearer " + k},
-                                   json={"model": m, "messages": msgs, "temperature": temp, "max_tokens": 220})
+                body = {"model": m, "messages": msgs, "temperature": temp, "max_tokens": 220}
+                if m.startswith("openai/gpt-oss"):   # fikrlovchi model: qisqa o'ylasin, o'ylash matni chiqmasin, javobga joy qolsin
+                    body.update({"reasoning_effort": "low", "include_reasoning": False, "max_tokens": 700})
+                st, j = await post(http, GROQ + "/chat/completions", {"Authorization": "Bearer " + k}, json=body)
             except (aiohttp.ClientError, asyncio.TimeoutError):
                 key_bad[k] = time.time()
                 break
             if st == 200:
-                return j["choices"][0]["message"]["content"]
+                txt = (j["choices"][0]["message"].get("content") or "").strip()
+                if txt:
+                    return txt
+                continue
+            if st in (400, 404):
+                continue                      # model yo'q yoki so'rov qabul qilinmadi: keyingi modelga o'tamiz
             if st == 429:
                 continue                      # shu kalitda boshqa model yoki keyingi kalit
             if st in (401, 402, 403) or st >= 500:
