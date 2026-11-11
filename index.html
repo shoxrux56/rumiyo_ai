@@ -45,7 +45,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 </head>
 <body>
 
-<section id="s-msg" class="scr hide"><div class="mid"><div class="emoji">🤷</div><h1 id="msg-t"></h1><p id="msg-p" class="lead"></p><button id="b-ext" class="btn" hidden>🌐 Brauzerda ochish</button></div></section>
+<section id="s-msg" class="scr hide"><div class="mid"><div class="emoji">🤷</div><h1 id="msg-t"></h1><p id="msg-p" class="lead"></p></div></section>
 
 <section id="s-hello" class="scr hide">
   <div class="mid">
@@ -86,9 +86,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
   var botUrl = "https://t.me/rumiyo_bot";
   var mic = null, recorder = null, chunks = [], rec = false, busy = false, audio = null, tick = null, left = 0, ctx = null;
 
-  function noMic(t, p) {
-    $("msg-t").textContent = t; $("msg-p").textContent = p; $("b-ext").hidden = false; show("s-msg");
-  }
+  function noMic(t, p) { $("msg-t").textContent = t; $("msg-p").textContent = p; show("s-msg"); }
   function show(id) { ["s-msg", "s-hello", "s-chat", "s-end"].forEach(function (s) { $(s).classList.toggle("hide", s !== id); }); }
   function state(t) { $("state").textContent = t; }
   function fmt(s) { s = Math.max(0, s | 0); return Math.floor(s / 60) + ":" + ("0" + (s % 60)).slice(-2); }
@@ -139,7 +137,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 
   function begin() {
     if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) || !window.MediaRecorder) {
-      return noMic("Mikrofon bu yerda ishlamaydi", "Telegram ichida mikrofon ochilmadi. Pastdagi tugma bilan Chrome yoki Safari'da oching.");
+      return noMic("Mikrofon bu yerda ishlamaydi", "Mikrofon ochilmadi. Qurilma sozlamasidan mikrofonga ruxsat bering.");
     }
     navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(function (s) {
       mic = s; $("log").innerHTML = ""; show("s-chat"); setAv("idle"); state("Rumiyo o'ylayapti…"); $("b-mic").disabled = true;
@@ -153,7 +151,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
         return play(j.audio, j.ru).then(function () { speaking = false; if (rec) return; setAv("idle"); $("b-mic").disabled = false; state("Tugmani bosib ruscha javob bering"); });
       }).catch(function () { state("Aloqa xatosi. Sahifani yangilang."); });
     }).catch(function () {
-      noMic("Mikrofon yopiq", "Mikrofonga ruxsat bering. Telegramda ishlamasa, pastdagi tugma bilan brauzerda oching.");
+      noMic("Mikrofon yopiq", "Telegram sozlamasidan mikrofonga ruxsat bering va qayta oching.");
     });
   }
 
@@ -212,10 +210,6 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
       }).catch(function () { busy = false; $("b-mic").disabled = false; state("Aloqa xatosi. Tugmani qayta bosing"); });
   }
 
-  $("b-ext").onclick = function () {
-    try { if (window.Telegram && Telegram.WebApp && Telegram.WebApp.openLink) return Telegram.WebApp.openLink(location.href, { try_instant_view: false }); } catch (e) {}
-    window.open(location.href, "_blank");
-  };
   try { if (window.Telegram && Telegram.WebApp) { Telegram.WebApp.ready(); Telegram.WebApp.expand(); } } catch (e) {}
   $("b-go").onclick = begin; $("b-mic").onclick = micToggle;
   $("b-end").onclick = function () {
