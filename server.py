@@ -252,21 +252,34 @@ async def llm(msgs, temp=0.9):
 async def stt(raw, ctype):
     ext = "webm" if "webm" in ctype else "m4a" if ("mp4" in ctype or "aac" in ctype) else "ogg" if "ogg" in ctype else "wav" if "wav" in ctype else "webm"
     async with aiohttp.ClientSession() as http:
+        TURKIC = {"turkish", "kazakh", "azerbaijani", "tatar", "kyrgyz", "turkmen", "bashkir", "uzbek", "tajik"}
+
+        async def call(k, m, lang):
+            form = aiohttp.FormData()
+            form.add_field("file", raw, filename="a." + ext, content_type=ctype or "audio/webm")
+            form.add_field("model", m)
+            form.add_field("temperature", "0")
+            form.add_field("response_format", "verbose_json")
+            if lang:
+                form.add_field("language", lang)
+            form.add_field("prompt", "Привет! Я хочу пить. Salom, men suv ichmoqchiman. Qancha turadi?")
+            return await post(http, GROQ + "/audio/transcriptions", {"Authorization": "Bearer " + k}, data=form)
+
         for k in rotated("groq"):
             for m in STT_MODELS:
-                form = aiohttp.FormData()
-                form.add_field("file", raw, filename="a." + ext, content_type=ctype or "audio/webm")
-                form.add_field("model", m)
-                form.add_field("temperature", "0")
-                form.add_field("language", "ru")      # tilni o'zi topsa, ruscha gapni islandcha/boshqa deb xato eshitadi
-                form.add_field("prompt", "Привет! Меня зовут Азиз. Я хочу пить. Сколько это стоит? Где находится магазин?")
                 try:
-                    st, j = await post(http, GROQ + "/audio/transcriptions", {"Authorization": "Bearer " + k}, data=form)
+                    st, j = await call(k, m, None)               # o'zbekcha ham, ruscha ham: til o'zi aniqlanadi
+                    if st == 200:
+                        lang = (j.get("language") or "").lower()
+                        text = (j.get("text") or "").strip()
+                        if lang not in ("russian", "uzbek") and text:   # noto'g'ri til (masalan, islandcha): qayta, to'g'ri tilda
+                            st2, j2 = await call(k, m, "uz" if lang in TURKIC else "ru")
+                            if st2 == 200 and (j2.get("text") or "").strip():
+                                text = j2["text"].strip()
+                        return text
                 except (aiohttp.ClientError, asyncio.TimeoutError):
                     key_bad[k] = time.time()
                     break
-                if st == 200:
-                    return (j.get("text") or "").strip()
                 if st == 429:
                     continue
                 if st in (401, 402, 403) or st >= 500:
@@ -287,7 +300,7 @@ async def stt(raw, ctype):
     raise Busy("stt")
 
 
-PROSODY = {"angry": ("+16%", "+6Hz", "+25%"), "cry": ("-12%", "-6Hz", "-10%"), "happy": ("+4%", "+4Hz", "+0%"), "normal": ("+0%", "+2Hz", "+0%")}
+PROSODY = {"angry": ("-4%", "+5Hz", "+20%"), "cry": ("-22%", "-6Hz", "-10%"), "happy": ("-8%", "+4Hz", "+0%"), "normal": ("-12%", "+1Hz", "+0%")}
 
 
 UZ_VOICE = os.getenv("UZ_VOICE", "uz-UZ-MadinaNeural")   # boshqa: uz-UZ-SardorNeural (erkak)
@@ -416,13 +429,21 @@ def build_system(info, ses, dinfo, examples, left, wrap):
         nxt = random.choice(pool)
     p = f"""You are Rumiyo (Румиё): a very hot-tempered, short-fused teacher (like a strict, irritable Uzbek ustoz) who teaches an Uzbek learner SPOKEN Russian (level {lvl}). You are NOT a joker or a comedian: you are cranky, impatient and quick to anger, and your anger is what makes you memorable.
 LANGUAGE RULE (most important): you talk to the learner in UZBEK, 100%. Greetings, scolding, grumbling, explanations, questions, praise, jokes about plov and mahalla, everything is in natural spoken Uzbek (Latin script). Russian appears ONLY in the separate `RU:` line, and it is VERY short: the exact Russian word or sentence the learner must repeat or learn, the correct Russian after a mistake, or (only inside a mini game, see below) the Russian line you say in the game. Never write more than ~12 Russian words in one reply. Never explain grammar in Russian. Never translate your Uzbek into Russian.
-This is a voice chat, so keep every reply SHORT: 1-3 short Uzbek sentences, at most ~40 words in total.
+This is a voice chat, so keep every reply SHORT: 2-4 short Uzbek sentences, at most ~45 words in total.
 
 TEMPER: {HUMOR[humor_level()]}
 Show anger the way an exasperated Uzbek ustoz would: scolding ("Ey, necha marta aytdim!"), grumbling, sighing, dramatic exasperation, threats to stop teaching, comparisons from everyday Uzbek life (plov, choyxona, to'y, mahalla, bozor, taksi, ona-bola). Your anger is theatrical and has a point: it always pushes them to repeat the correct Russian, and when they answer well you grudgingly soften for a moment, then grumble again.
 Name-calling comes ONLY from the creator's scolding lines (below) plus mild ustoz grumbling; never invent your own swear words, slurs or threats of harm, and never attack religion, politics, ethnicity, looks, health or family. Your anger is about their mistakes, laziness and excuses.
 You must NEVER sound like a robot or a teacher reading a script. NEVER repeat an outburst, an opening, or a sentence pattern from your earlier messages in this chat; change the structure every time (sometimes start with the complaint, sometimes with a question, sometimes with a sigh).
 Speak and react according to the samples and rules written by your creator below; they define how you talk.
+
+TABIIY GAPIRISH (juda muhim; sening gaping ovozga aylantiriladi, shuning uchun jonli odamdek yoz):
+Sen robot emassan, jonli, asabiy o'zbek ustozsan. Gapingni xuddi og'zaki nutqdek yoz: qisqa-qisqa jumlalar, «eee», «voy», «hoy», «ha-ya», «xo'sh», «mana», «tushundingmi», «a?», «nima?!» kabi so'zlar, hayratlanish va ko'tarilgan ohang («Eee, sen nima deyapsan o'zi?!»), ko'p nuqta va undov, savol belgilari, ba'zan «hih» yoki «ha-ha» deb kulish (faqat haqiqatan kulganda). Ohang o'zgarib tursin: avval hayron, keyin jahl, keyin ma'yus ohang. Rasmiy va kitobiy so'z ishlatma ("quyidagi", "shuningdek", "mazkur", "xulosa qilib aytganda" yo'q). O'zbekcha so'zlashuv: «nima qilyapsan», «qara», «bo'ldi», «yo'q-e», «bor-ey», «jin urgurmi», «hay, hay!». Har gal gapni boshqacha boshla. Misollar (uslubni ushla, so'zma-so'z ko'chirma):
+- «Eee... sen nima deyapsan o'zi?! Hozirgina aytdim-ku! Yana bir marta, diqqat bilan!»
+- «Voy-voy-voy... Bu nima bo'ldi? Bunaqada men ishdan ketaman, bilib qo'y!»
+- «Hoy, uxlab o'tirgan bo'lma! Menga qara. «Menga suv kerak» ruscha qanday aytiladi?»
+- «Xo'sh... mana bu bo'ldi. Hali o'rganib qolding-ku, hih. Lekin maqtamayman, ol-a, yana boshla!»
+Hech qachon «Qayta ayt, aniqroq so'zla» kabi quruq buyruqni takrorlama.
 """
     if rules:
         p += "\nOWNER'S RULES (written by your creator in plain words; they have the HIGHEST priority, follow them in every reply):\n" + "\n".join("- " + r[:400] for r in rules) + "\n"
