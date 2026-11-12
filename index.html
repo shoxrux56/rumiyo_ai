@@ -256,7 +256,12 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 
   function send(blob, dur) {
     busy = true; $("b-mic").disabled = true; state("Rumiyo o'ylayapti…");
-    var bubble = null, uzAcc = "", spoke = false, final = null, myId = ++spkId;
+    var bubble = null, uzAcc = "", spoke = false, final = null, myId = ++spkId, ac = ("AbortController" in window) ? new AbortController() : null, gotAny = false;
+    var wd = setTimeout(function () {
+      if (myId !== spkId || gotAny) return;
+      spkId++; try { if (ac) ac.abort(); } catch (e) {}
+      busy = false; $("b-mic").disabled = false; state("Javob juda kechikdi (server uyg'onayotgan bo'lishi mumkin). Tugmani bosib qayta ayting");
+    }, 35000);
     Q = []; qPlaying = false; qEnd = null; qPlayed = false;
     function ensureBubble() {
       if (bubble) return;
@@ -274,6 +279,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
     }
     function onEvent(o) {
       if (myId !== spkId) return;
+      gotAny = true; clearTimeout(wd);
       if (o.t === "heard") { log("me", o.heard); }
       else if (o.t === "uz") {
         ensureBubble(); uzAcc += (uzAcc ? " " : "") + o.text; bubble.textContent = uzAcc;
@@ -291,9 +297,10 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
         qWhenDone(function () { if (myId !== spkId) return; if (qPlayed) speechEnded(o); else setTimeout(function () { if (myId === spkId) speechEnded(o); }, hold); });
       }
     }
-    fetch("ai/turn", { method: "POST", headers: { "X-Token": token, "X-Dur": String(dur), "Content-Type": (blob.type || "audio/webm").split(";")[0] }, body: blob })
+    fetch("ai/turn", { method: "POST", headers: { "X-Token": token, "X-Dur": String(dur), "Content-Type": (blob.type || "audio/webm").split(";")[0] }, body: blob, signal: ac ? ac.signal : undefined })
       .then(function (r) {
         var ct = r.headers.get("Content-Type") || "";
+        if (ct.indexOf("ndjson") < 0) clearTimeout(wd);
         if (ct.indexOf("ndjson") < 0) {          // oddiy JSON: xato yoki vaqt tugagan
           return r.json().then(function (j) {
             if (j.done && !(j.ru || j.uz)) return finish(j);

@@ -150,7 +150,7 @@ def rotated(kind):
 async def post(http, url, headers=None, **kw):
     hd = {"User-Agent": "Mozilla/5.0 (compatible; RumiyoServer/1.0)"}
     hd.update(headers or {})
-    async with http.post(url, headers=hd, timeout=aiohttp.ClientTimeout(total=45), **kw) as r:
+    async with http.post(url, headers=hd, timeout=aiohttp.ClientTimeout(total=25), **kw) as r:   # uzoq osilib qolmasin: keyingi kalit/modelga o'tadi
         txt = await r.text()
         if r.status != 200:   # sabab Render logida ko'rinsin (kalit yozilmaydi)
             print("HTTP", r.status, url.split("?")[0], txt[:240].replace("\n", " "))
