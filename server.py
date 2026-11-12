@@ -660,12 +660,18 @@ async def gem_stream(http, model, key, body):
                     yield part["text"]
 
 
-def _stream_sources(msgs, temp):
-    """(provayder, kalit, oqim-yaratuvchi) ro'yxati, LLM_ORDER tartibida."""
+def _stream_sources(msgs, temp, audio=None):
+    """(provayder, kalit, oqim-yaratuvchi) ro'yxati, LLM_ORDER tartibida. audio=(bayt, mime) bo'lsa faqat Gemini (ovozni to'g'ridan-to'g'ri eshitadi)."""
     out = []
     sys_txt, cont = gem_contents(msgs)
+    if audio:
+        part = {"inline_data": {"mime_type": (audio[1] or "audio/webm").split(";")[0], "data": base64.b64encode(audio[0]).decode()}}
+        if cont and cont[-1]["role"] == "user":
+            cont[-1]["parts"].append(part)
+        else:
+            cont.append({"role": "user", "parts": [part]})
     gbody = {"systemInstruction": {"parts": [{"text": sys_txt}]}, "contents": cont, "generationConfig": {"temperature": temp, "maxOutputTokens": 500}}
-    for prov in LLM_ORDER:
+    for prov in (["gemini"] if audio else LLM_ORDER):
         if prov == "groq":
             for k in rotated("groq"):
                 for m in LLM_MODELS:
@@ -684,9 +690,9 @@ def _stream_sources(msgs, temp):
     return out
 
 
-async def llm_stream(msgs, temp=0.95):
+async def llm_stream(msgs, temp=0.95, audio=None):
     async with aiohttp.ClientSession() as http:
-        for prov, k, mk in _stream_sources(msgs, temp):
+        for prov, k, mk in _stream_sources(msgs, temp, audio):
             got = False
             try:
                 async for t in mk(http):
@@ -708,7 +714,7 @@ async def llm_stream(msgs, temp=0.95):
 _TAGS = re.compile(r"\n\s*(RU|FIX|EMO|Q)\s*:", re.I)
 
 
-async def reply_stream(info, ses, dinfo, user_text, left, emit):
+async def reply_stream(info, ses, dinfo, user_text, left, emit, audio=None):
     """reply_for ning oqimli varianti: UZ qatorining har bir tayyor jumlasi emit() bilan darhol yuboriladi."""
     humor = humor_level()
     n = {0: 2, 1: 3, 2: 4, 3: 5}[humor]
@@ -717,10 +723,18 @@ async def reply_stream(info, ses, dinfo, user_text, left, emit):
         ex += G.sample(n - len(ex), humor)
     wrap = left <= 50
     sysmsg, nxt = build_system(info, ses, dinfo, ex, left, wrap)
-    hist = ses["hist"] + [{"role": "user", "content": user_text}]
+    if audio:
+        sysmsg += ("\n\nTHE LEARNER'S LAST MESSAGE IS THE ATTACHED AUDIO (they speak Uzbek, Russian or a mix, possibly with mistakes). Listen to it carefully. "
+                   "Your reply MUST start with one extra first line: `HEARD: <what they said, VERBATIM, Uzbek in Latin letters, Russian in Cyrillic; do not correct their mistakes>`, "
+                   "then the usual lines (UZ, RU, FIX, EMO, Q). If they speak neither Uzbek nor Russian, write HEARD: (tushunarsiz til) and scold them in Uzbek for forgetting their own language and demand Uzbek or Russian. "
+                   "If you hear nothing intelligible, write HEARD: (eshitilmadi) and snap at them to speak up.")
+        hist = list(ses["hist"])
+    else:
+        hist = ses["hist"] + [{"role": "user", "content": user_text}]
     base = [{"role": "system", "content": sysmsg}] + hist
     emo_guess = ses.get("emo") or "angry"
     buf, pos, pending, emitted = "", 0, "", []
+    heard_box = [None]
 
     async def flush(final=False):
         nonlocal pos, pending
@@ -733,20 +747,37 @@ async def reply_stream(info, ses, dinfo, user_text, left, emit):
         line_done = bool(mt) or final
         while True:
             rem = region[pos:]
-            m = re.match(r"\s*(.+?[.!?\u2026]+[\u00bb\"')\u201d]*)(?=\s|$)", rem, re.S) if (line_done or re.search(r"[.!?\u2026]+[\u00bb\"')\u201d]*\s", rem)) else None
+            # birinchi bo'lak: vergul/tire ham yetadi (tezroq boshlash); keyingilari: jumla oxiri
+            pat = r"\s*(.+?[.!?\u2026,;:\u2014]+[\u00bb\"')\u201d]*)(?=\s|$)" if not emitted and not pending else r"\s*(.+?[.!?\u2026]+[\u00bb\"')\u201d]*)(?=\s|$)"
+            m = re.match(pat, rem, re.S) if (line_done or re.search(r"[.!?\u2026,;:\u2014]+[\u00bb\"')\u201d]*\s", rem)) else None
             if not m:
                 break
             pending += (" " if pending else "") + m.group(1).strip()
             pos += m.end()
-            if len(pending) >= (12 if not emitted else 30):
+            if len(pending) >= (10 if not emitted else 30):
                 emitted.append(pending); await emit({"t": "uz", "text": pending, "emo": emo_guess}); pending = ""
         if line_done and pending:
             emitted.append(pending); await emit({"t": "uz", "text": pending, "emo": emo_guess}); pending = ""
 
-    async for delta in llm_stream(base, 0.95):
+    async def try_heard():
+        if audio and heard_box[0] is None:
+            mh = re.search(r"HEARD:\s*(.*?)\s*\n", buf, re.I)
+            if mh:
+                heard_box[0] = mh.group(1).strip()
+                await emit({"t": "heard", "heard": heard_box[0]})
+
+    async for delta in llm_stream(base, 0.95, audio):
         buf += delta
+        await try_heard()
         await flush()
+    await try_heard()
     await flush(final=True)
+    if audio:
+        if heard_box[0] is None:
+            mh = re.search(r"HEARD:\s*(.*)", buf, re.I)
+            heard_box[0] = (mh.group(1).strip() if mh else "")
+            await emit({"t": "heard", "heard": heard_box[0] or "(…)"})
+        hist = list(ses["hist"]) + [{"role": "user", "content": heard_box[0] or "(…)"}]
     ru, uz, fix, quiz, emo = parse(buf)
     done_txt = " ".join(emitted).strip()
     tail = ""
@@ -765,7 +796,7 @@ async def reply_stream(info, ses, dinfo, user_text, left, emit):
     if emo == "normal" and not wrap and (fix or humor_level() >= 2):
         emo = "angry"
     ses["emo"] = emo
-    return ru, uz, fix, wrap, emo
+    return ru, uz, fix, wrap, emo, (heard_box[0] if audio else user_text)
 
 
 # ---------- endpoints ----------
@@ -832,20 +863,10 @@ async def ai_turn(request):
         dur = max(1, min(30, int(float(request.headers.get("X-Dur", "5")))))
     except ValueError:
         dur = 5
+    ctype = request.headers.get("Content-Type", "")
     ses = get_session(info)
     dinfo = await day_info(info.get("d"))
     t0 = time.time()
-    try:
-        async with gate:
-            heard, foreign = await stt(raw, request.headers.get("Content-Type", ""))
-    except Busy:
-        return web.json_response({"error": "Rumiyo hozir band. Bir oz kutib, qayta urinib ko'ring. [sabab: " + ("; ".join("%s %s" % kv for kv in LAST_ERR.items()) or "noma'lum") + "]"}, status=429)
-    except Exception as e:
-        print("turn xato:", type(e).__name__, str(e)[:200])
-        return web.json_response({"error": "Xatolik bo'ldi, vaqtingizdan hisoblanmadi. Qayta urinib ko'ring."}, status=500)
-    if not heard:
-        return web.json_response({"error": "Ovozni eshita olmadim. Aniqroq gapiring."}, status=422)
-    t_stt = time.time() - t0
     resp = web.StreamResponse(headers={"Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
     await resp.prepare(request)
 
@@ -859,16 +880,32 @@ async def ai_turn(request):
             first[0] = time.time() - t0
         await emit(o)
 
-    await emit({"t": "heard", "heard": heard})
-    said = heard
-    if foreign:
-        said = ("(o'quvchining nutqi na o'zbekcha, na ruscha eshitildi; eshitilgani: «%s». Jahl bilan «o'z tilingni unutdingmi?» deb koy va "
-                "o'zbekcha yoki ruscha gapirishni talab qil.)" % heard[:60])
+    busy_msg = "Rumiyo hozir band. Bir oz kutib, qayta urinib ko'ring. [sabab: " + "%s" + "]"
+    res = None
+    mode = "?"
     try:
         async with gate:
-            ru, uz, fix, wrap, emo = await reply_stream(info, ses, dinfo, said, left, emit_t)
+            if keys("gemini") and os.getenv("DIRECT_AUDIO", "1") != "0":
+                try:      # ovoz to'g'ridan-to'g'ri Gemini'ga: matnga o'tkazish bosqichi yo'q
+                    res = await reply_stream(info, ses, dinfo, "", left, emit_t, audio=(raw, ctype))
+                    mode = "to'g'ridan-to'g'ri"
+                except Busy:
+                    res = None
+            if res is None:
+                mode = "eshitish + AI"
+                heard, foreign = await stt(raw, ctype)
+                if not heard:
+                    await emit({"t": "error", "error": "Ovozni eshita olmadim. Aniqroq gapiring."})
+                    await resp.write_eof()
+                    return resp
+                await emit({"t": "heard", "heard": heard})
+                said = heard
+                if foreign:
+                    said = ("(o'quvchining nutqi na o'zbekcha, na ruscha eshitildi; eshitilgani: «%s». Jahl bilan «o'z tilingni unutdingmi?» deb koy va "
+                            "o'zbekcha yoki ruscha gapirishni talab qil.)" % heard[:60])
+                res = await reply_stream(info, ses, dinfo, said, left, emit_t)
     except Busy:
-        await emit({"t": "error", "error": "Rumiyo hozir band. Bir oz kutib, qayta urinib ko'ring. [sabab: " + ("; ".join("%s %s" % kv for kv in LAST_ERR.items()) or "noma'lum") + "]"})
+        await emit({"t": "error", "error": busy_msg % ("; ".join("%s %s" % kv for kv in LAST_ERR.items()) or "noma'lum")})
         await resp.write_eof()
         return resp
     except Exception as e:
@@ -876,12 +913,13 @@ async def ai_turn(request):
         await emit({"t": "error", "error": "Xatolik bo'ldi, vaqtingizdan hisoblanmadi. Qayta urinib ko'ring."})
         await resp.write_eof()
         return resp
+    ru, uz, fix, wrap, emo, heard = res
     add_use(uid, dur + min(20, (len(uz) + len(ru)) // 14 + 2))
     left = left_for(uid)
     done = left <= 0 or wrap
     if done:
         asyncio.create_task(update_notes(uid, list(ses["hist"])))
-    print("turn: eshitish %.1fs, birinchi gap %.1fs, jami %.1fs" % (t_stt, first[0] or -1, time.time() - t0))
+    print("turn [%s]: birinchi gap %.1fs, jami %.1fs" % (mode, first[0] or -1, time.time() - t0))
     out = {"t": "final", "heard": heard, "ru": ru, "uz": uz, "fix": fix, "emo": emo, "left": left, "done": done}
     if done:
         out.update({"cta": cta_text(), "bot": BOT_URL})
