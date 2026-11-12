@@ -450,7 +450,7 @@ HUMOR = {0: "Strict but calm teacher, no shouting.",
          3: "Very hot-tempered, dramatic and loud-tempered in EVERY reply, even in greetings: you get cross, exasperated, scold, grumble and threaten (comically) to quit teaching, but you secretly care."}
 
 
-def build_system(info, ses, dinfo, examples, left, wrap):
+def build_system(info, ses, dinfo, examples, left, wrap, live=False):
     lvl = str(info.get("l") or "A1")
     topic = (dinfo or {}).get("t") or info.get("t") or ""
     items = (dinfo or {}).get("i") or []
@@ -519,7 +519,7 @@ WHAT TO DO: greet in your cranky Uzbek way (annoyed they came late or unprepared
     p += f"\nTime left in today's chat: about {left} seconds."
     if wrap:
         p += "\nTIME IS NEARLY UP: in this reply say a funny goodbye in Uzbek and tell them to go back to the Telegram bot to continue learning (they will press the button below). No new question."
-    p += """
+    p += LIVE_NOTE if live else """
 
 OUTPUT FORMAT, exactly these lines:
 UZ: <your reply in Uzbek, the main thing you say>
@@ -799,6 +799,182 @@ async def reply_stream(info, ses, dinfo, user_text, left, emit, audio=None):
     return ru, uz, fix, wrap, emo, (heard_box[0] if audio else user_text)
 
 
+# ---------- JONLI REJIM: Gemini Live (ovoz oqim bilan, to'xtatib gapirish mumkin) ----------
+LIVE_MODEL = os.getenv("LIVE_MODEL", "gemini-3.8-live")
+LIVE_VOICE = os.getenv("LIVE_VOICE", "Charon")     # boshqa ovozlar: Puck, Kore, Fenrir, Orus, Aoede, Leda, Zephyr
+GEMINI_WS = os.getenv("GEMINI_WS", "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent")
+LIVE_ON = os.getenv("LIVE", "1") != "0"
+LIVE_NOTE = """
+
+THIS IS A LIVE VOICE CALL. You SPEAK out loud and hear the learner's real voice, continuously. Ignore every instruction above about output lines (UZ / RU / FIX / EMO / Q): there are no labels, you simply talk like a real person on the phone.
+Wherever the instructions above say to put Russian in the `RU:` line, simply say that short Russian word or phrase aloud, clearly and a bit slowly, then go on in Uzbek. All your explaining, scolding, asking and praising stays in natural spoken Uzbek, with the short modern street slang described above. Russian only for the phrase to learn/repeat or inside a tiny game.
+Keep every turn short (1-3 sentences). Speak with real emotion: sigh, gasp, raise your voice when angry, laugh sometimes, pause. React to the learner's actual words right away. If they interrupt you, stop and answer them. If they speak neither Uzbek nor Russian, scold them for forgetting their own language and demand Uzbek or Russian."""
+
+
+async def live_open(http, sysmsg):
+    """Kalitlarni aylanib Gemini Live'ga ulanadi; (ws, kalit) yoki None."""
+    setup = {"setup": {"model": "models/" + LIVE_MODEL,
+                       "generationConfig": {"responseModalities": ["AUDIO"],
+                                            "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": LIVE_VOICE}}}},
+                       "systemInstruction": {"parts": [{"text": sysmsg}]},
+                       "inputAudioTranscription": {}, "outputAudioTranscription": {}}}
+    for k in rotated("gemini"):
+        up = None
+        try:
+            up = await http.ws_connect(f"{GEMINI_WS}?key={k}", max_msg_size=0, heartbeat=20, timeout=aiohttp.ClientWSTimeout(ws_close=10) if hasattr(aiohttp, "ClientWSTimeout") else 10)
+            await up.send_str(json.dumps(setup))
+            msg = await asyncio.wait_for(up.receive(), timeout=12)
+            data = msg.data.decode("utf-8", "ignore") if isinstance(msg.data, (bytes, bytearray)) else (msg.data or "")
+            if msg.type in (aiohttp.WSMsgType.TEXT, aiohttp.WSMsgType.BINARY) and "setupComplete" in data:
+                return up, k
+            print("LIVE setup rad etildi:", str(data)[:240].replace("\n", " "), "| close:", getattr(up, "close_code", None))
+            LAST_ERR["live"] = str(data)[:110].replace("\n", " ") or ("close %s" % getattr(up, "close_code", ""))
+            if "API key" in str(data) or "PERMISSION" in str(data) or "UNAUTH" in str(data):
+                key_bad[k] = time.time()
+        except Exception as e:
+            print("LIVE ulanish xato:", type(e).__name__, str(e)[:160])
+            LAST_ERR["live"] = "%s %s" % (type(e).__name__, str(e)[:90])
+        if up is not None and not up.closed:
+            await up.close()
+    return None
+
+
+async def ai_live(request):
+    ws = web.WebSocketResponse(max_msg_size=1 << 20, heartbeat=25)
+    await ws.prepare(request)
+
+    async def j(o):
+        try:
+            await ws.send_str(json.dumps(o, ensure_ascii=False))
+        except Exception:
+            pass
+
+    info = verify(request.query.get("t"))
+    if not info:
+        await j({"t": "error", "error": "Havola eskirgan. Botdan qayta oching."}); await ws.close(); return ws
+    uid = int(info["u"])
+    left0 = left_for(uid)
+    if left0 <= 0:
+        await j({"t": "done", "cta": cta_text(), "bot": BOT_URL}); await ws.close(); return ws
+    if not (LIVE_ON and keys("gemini")):
+        await j({"t": "nolive"}); await ws.close(); return ws
+    ses = get_session(info)
+    dinfo = await day_info(info.get("d"))
+    humor = humor_level()
+    ex = G.sample({0: 2, 1: 3, 2: 4, 3: 5}[humor], humor)
+    sysmsg, _nxt = build_system(info, ses, dinfo, ex, left0, False, live=True)
+    t0 = time.time()
+    turns = []        # [("u"|"a", matn)]
+    async with aiohttp.ClientSession() as http:
+        opened = await live_open(http, sysmsg)
+        if not opened:
+            await j({"t": "nolive", "why": "; ".join("%s %s" % kv for kv in LAST_ERR.items())[:200]}); await ws.close(); return ws
+        up, _k = opened
+        again = bool(ses["hist"])
+        opener = ("(o'quvchi chatga qaytib keldi: jahl bilan 'yana kech keldingmi' qabilida kutib ol, oldingi gapimizni eslat)" if again
+                  else "(o'quvchi endigina qo'ng'iroqni ochdi: jahldor ohangda salom ber, bugungi mavzuga ulab, bugun nechta gap yodlaganini so'ra)")
+        await up.send_str(json.dumps({"realtimeInput": {"text": opener}}))
+        await j({"t": "ready", "left": left0})
+        state = {"wrap": False, "cur_in": "", "cur_out": ""}
+
+        async def flush_turn():
+            if state["cur_in"].strip():
+                turns.append(("u", state["cur_in"].strip()))
+            if state["cur_out"].strip():
+                turns.append(("a", state["cur_out"].strip()))
+            state["cur_in"] = state["cur_out"] = ""
+
+        async def c2u():
+            async for m in ws:
+                if m.type == aiohttp.WSMsgType.BINARY:
+                    await up.send_str(json.dumps({"realtimeInput": {"audio": {"data": base64.b64encode(m.data).decode(), "mimeType": "audio/pcm;rate=16000"}}}))
+                elif m.type == aiohttp.WSMsgType.TEXT:
+                    try:
+                        o = json.loads(m.data)
+                    except ValueError:
+                        continue
+                    if o.get("t") == "end":
+                        return
+                elif m.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.ERROR):
+                    return
+
+        async def u2c():
+            async for m in up:
+                if m.type not in (aiohttp.WSMsgType.TEXT, aiohttp.WSMsgType.BINARY):
+                    if m.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.ERROR):
+                        print("LIVE yopildi:", up.close_code, str(m.data)[:200])
+                        LAST_ERR["live"] = "close %s %s" % (up.close_code, str(m.data)[:80])
+                        return
+                    continue
+                raw = m.data.decode("utf-8", "ignore") if isinstance(m.data, (bytes, bytearray)) else m.data
+                try:
+                    o = json.loads(raw)
+                except ValueError:
+                    continue
+                sc = o.get("serverContent") or {}
+                for part in ((sc.get("modelTurn") or {}).get("parts") or []):
+                    inl = part.get("inlineData") or part.get("inline_data")
+                    if inl and inl.get("data"):
+                        await ws.send_bytes(base64.b64decode(inl["data"]))
+                it = (sc.get("inputTranscription") or {}).get("text")
+                if it:
+                    if state["cur_out"].strip():
+                        await flush_turn()
+                    state["cur_in"] += it
+                    await j({"t": "in", "text": it})
+                ot = (sc.get("outputTranscription") or {}).get("text")
+                if ot:
+                    state["cur_out"] += ot
+                    await j({"t": "out", "text": ot})
+                if sc.get("interrupted"):
+                    await j({"t": "int"})
+                if sc.get("turnComplete"):
+                    await flush_turn()
+                    await j({"t": "turn"})
+                if o.get("error") or o.get("goAway"):
+                    print("LIVE xabar:", str(o)[:200])
+
+        async def clock():
+            last = -99
+            while True:
+                await asyncio.sleep(1)
+                rem = left0 - int(time.time() - t0)
+                if rem <= 0:
+                    return
+                if rem <= 50 and not state["wrap"]:
+                    state["wrap"] = True
+                    await up.send_str(json.dumps({"realtimeInput": {"text": "(VAQT TUGAYAPTI: shu gapingdan keyin xayrlash: hazil bilan xayrlash va botga qaytib o'qishni davom ettirishni ayt. Yangi savol berma.)"}}))
+                if rem // 5 != last:
+                    last = rem // 5
+                    await j({"t": "left", "left": rem})
+
+        tasks = [asyncio.create_task(x()) for x in (c2u, u2c, clock)]
+        try:
+            await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            for t in tasks:
+                t.cancel()
+            await flush_turn()
+            elapsed = int(time.time() - t0)
+            try:
+                await up.close()
+            except Exception:
+                pass
+    add_use(uid, max(1, elapsed))
+    for who, txt in turns:
+        ses["hist"].append({"role": "user" if who == "u" else "assistant", "content": txt if who == "u" else f"UZ: {txt}\nRU: "})
+    ses["hist"] = ses["hist"][-mem_msgs():]
+    ses["turns"] += len(turns) // 2
+    asyncio.create_task(update_notes(uid, list(ses["hist"])))
+    rem = left_for(uid)
+    await j({"t": "done", "cta": cta_text(), "bot": BOT_URL, "left": rem})
+    try:
+        await ws.close()
+    except Exception:
+        pass
+    return ws
+
+
 # ---------- endpoints ----------
 async def ai_start(request):
     try:
@@ -816,6 +992,12 @@ async def ai_start(request):
     if not keys("groq") and not keys("openrouter") and not keys("gemini"):
         return web.json_response({"error": "Rumiyo hozir vaqtincha ishlamayapti."}, status=503)
     ses = get_session(info)
+    try:
+        want_live = bool((await request.json()).get("live"))
+    except Exception:
+        want_live = False
+    if want_live and LIVE_ON and keys("gemini"):      # jonli rejim: salomlashuvni Gemini Live o'zi aytadi
+        return web.json_response({"live": True, "left": left, "topic": topic, "bot": BOT_URL})
     again = bool(ses["hist"])
     opener = ("(o'quvchi chatga qaytib keldi — jahl bilan 'yana kech keldingmi' qabilida kutib ol, oldingi gapimizni eslat)" if again
               else "(o'quvchi endigina chatni ochdi — jahldor ohangda salom ber va bugungi mavzuga ulab, bugun nechta gap yodlaganini so'ra)")
@@ -1069,6 +1251,7 @@ def add_routes(app, prefix=""):
     """Rumiyo yo'llarini ilovaga qo'shadi. Suhbat serveriga ulanganda prefix='/rumiyo'."""
     p = prefix
     app.router.add_post(p + "/ai/start", ai_start)
+    app.router.add_get(p + "/ai/live", ai_live)
     app.router.add_post(p + "/ai/turn", ai_turn)
     app.router.add_post(p + "/ai/end", ai_end)
     app.router.add_post(p + "/ai/tts", ai_tts)

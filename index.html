@@ -199,20 +199,108 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
     $("e-bot").href = botUrl; show("s-end");
   }
 
+  function classicShow(j) {
+    if (j.done && !(j.ru || j.uz)) return finish(j);
+    if (j.error) { state(j.error); return; }
+    if (j.bot) botUrl = j.bot;
+    $("c-topic").textContent = j.topic ? "Mavzu: " + j.topic : "";
+    setLeft(j.left); aiLog(j); setAv(emoClip(j.emo));
+    speaking = true; $("b-mic").disabled = false; state("Gapirish uchun tugmani bosing (Rumiyo to'xtaydi)");
+    return speak(j).then(function () { speaking = false; if (rec) return; setAv("idle"); $("b-mic").disabled = false; state("Tugmani bosib ruscha javob bering"); });
+  }
+  function classicStart() {
+    $("b-mic").classList.remove("rec"); $("b-mic").disabled = true; state("Rumiyo o'ylayapti…");
+    return post("ai/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token }) })
+      .then(classicShow).catch(function () { state("Aloqa xatosi. Sahifani yangilang."); });
+  }
+
+  // ---------- JONLI REJIM (Gemini Live): ovoz to'xtovsiz oqadi, gapirsangiz Rumiyo to'xtaydi ----------
+  var live = null;
+  function mkBubble(cls) { var d = document.createElement("div"); d.className = "m " + cls; $("log").appendChild(d); return d; }
+  function livePlay(L, buf) {
+    if (buf.byteLength % 2) buf = buf.slice(0, buf.byteLength - 1);
+    var i16 = new Int16Array(buf), f = new Float32Array(i16.length);
+    for (var i = 0; i < i16.length; i++) f[i] = i16[i] / 32768;
+    var ab = L.pctx.createBuffer(1, f.length, 24000); ab.copyToChannel(f, 0);
+    var src = L.pctx.createBufferSource(); src.buffer = ab; src.connect(L.pctx.destination);
+    var t = Math.max(L.pctx.currentTime + 0.03, L.next); src.start(t); L.next = t + ab.duration;
+    L.srcs.push(src); setAv(emoClip("angry"));
+    src.onended = function () { var k = L.srcs.indexOf(src); if (k >= 0) L.srcs.splice(k, 1); if (!L.srcs.length) { setAv("idle"); } };
+  }
+  function liveStopPlay(L) { L.srcs.forEach(function (x) { try { x.stop(); } catch (e) {} }); L.srcs = []; L.next = 0; setAv("idle"); }
+  function liveCleanup() {
+    var L = live; if (!L || L.closed) return; L.closed = true;
+    try { if (L.proc) { L.proc.disconnect(); L.proc.onaudioprocess = null; } } catch (e) {}
+    try { if (L.cin) L.cin.close(); } catch (e) {}
+    try { liveStopPlay(L); if (L.pctx) L.pctx.close(); } catch (e) {}
+    try { L.ws.close(); } catch (e) {}
+    $("b-mic").classList.remove("rec");
+  }
+  function liveFail() {
+    if (!live || live.closed) return; liveCleanup(); live = null;
+    classicStart();      // Live ishlamasa (limit, tarmoq): oddiy bepul rejimga o'tamiz
+  }
+  function liveMute() {
+    var L = live; if (!L) return; L.muted = !L.muted;
+    $("b-mic").classList.toggle("rec", !L.muted);
+    state(L.muted ? "Mikrofon o'chiq. Yoqish uchun tugmani bosing" : "Eshityapman… istagan payt gapiring, Rumiyo to'xtaydi");
+  }
+  function liveStart(j) {
+    setLeft(j.left);
+    var AC = window.AudioContext || window.webkitAudioContext, ws;
+    var proto = location.protocol === "https:" ? "wss:" : "ws:", base = location.pathname.replace(/[^\/]*$/, "");
+    try { ws = new WebSocket(proto + "//" + location.host + base + "ai/live?t=" + encodeURIComponent(token)); } catch (e) { return classicStart(); }
+    ws.binaryType = "arraybuffer";
+    var L = live = { ws: ws, ready: false, muted: false, next: 0, srcs: [], curMe: null, curAi: null, closed: false };
+    state("Ulanyapman…"); $("b-mic").disabled = true;
+    try {
+      L.pctx = new AC(); if (L.pctx.resume) L.pctx.resume();
+      L.cin = new AC(); if (L.cin.resume) L.cin.resume();
+      var srcNode = L.cin.createMediaStreamSource(mic), ratio = L.cin.sampleRate / 16000;
+      L.proc = L.cin.createScriptProcessor(2048, 1, 1);
+      L.proc.onaudioprocess = function (e) {
+        if (!L.ready || L.muted || ws.readyState !== 1) return;
+        var f = e.inputBuffer.getChannelData(0), n = Math.floor(f.length / ratio), o = new Int16Array(n);
+        for (var i = 0; i < n; i++) {
+          var a = Math.floor(i * ratio), b = Math.min(f.length, Math.floor((i + 1) * ratio)), sum = 0, c = 0;
+          for (var k = a; k < b; k++) { sum += f[k]; c++; }
+          var v = c ? sum / c : 0; v = Math.max(-1, Math.min(1, v)); o[i] = v < 0 ? v * 32768 : v * 32767;
+        }
+        ws.send(o.buffer);
+      };
+      srcNode.connect(L.proc); L.proc.connect(L.cin.destination);
+    } catch (e) { return liveFail(); }
+    ws.onmessage = function (e) {
+      if (L.closed) return;
+      if (typeof e.data !== "string") { livePlay(L, e.data); return; }
+      var o; try { o = JSON.parse(e.data); } catch (x) { return; }
+      if (o.t === "ready") { L.ready = true; setLeft(o.left); $("b-mic").disabled = false; $("b-mic").classList.add("rec"); state("Eshityapman… istagan payt gapiring, Rumiyo to'xtaydi"); }
+      else if (o.t === "in") { if (!L.curMe) L.curMe = mkBubble("me"); L.curMe.textContent += o.text; L.curAi = null; $("log").scrollTop = 1e9; }
+      else if (o.t === "out") { if (!L.curAi) L.curAi = mkBubble("ai"); L.curAi.textContent += o.text; L.curMe = null; $("log").scrollTop = 1e9; }
+      else if (o.t === "int") { liveStopPlay(L); L.curAi = null; }
+      else if (o.t === "turn") { L.curMe = null; L.curAi = null; }
+      else if (o.t === "left") { setLeft(o.left); }
+      else if (o.t === "nolive") { liveFail(); }
+      else if (o.t === "error") { liveCleanup(); state(o.error || "Xatolik"); }
+      else if (o.t === "done") { var d = o; setTimeout(function () { liveCleanup(); finish(d); }, 1500); }
+    };
+    ws.onclose = function () { if (!L.closed && !L.ready) liveFail(); else if (!L.closed) { liveCleanup(); finish({ cta: "Aloqa uzildi. Botga qayting 👇" }); } };
+    ws.onerror = function () { if (!L.closed && !L.ready) liveFail(); };
+  }
+
   function begin() {
     if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) || !window.MediaRecorder) {
       return noMic("Mikrofon bu yerda ishlamaydi", "Mikrofon ochilmadi. Qurilma sozlamasidan mikrofonga ruxsat bering.");
     }
     navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(function (s) {
       mic = s; $("log").innerHTML = ""; show("s-chat"); setAv("idle"); state("Rumiyo o'ylayapti…"); $("b-mic").disabled = true;
-      post("ai/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token }) }).then(function (j) {
+      post("ai/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token, live: true }) }).then(function (j) {
         if (j.done && !(j.ru || j.uz)) return finish(j);
         if (j.error) { state(j.error); return; }
         if (j.bot) botUrl = j.bot;
         $("c-topic").textContent = j.topic ? "Mavzu: " + j.topic : "";
-        setLeft(j.left); aiLog(j); setAv(emoClip(j.emo));
-        speaking = true; $("b-mic").disabled = false; state("Gapirish uchun tugmani bosing (Rumiyo to'xtaydi)");
-        return speak(j).then(function () { speaking = false; if (rec) return; setAv("idle"); $("b-mic").disabled = false; state("Tugmani bosib ruscha javob bering"); });
+        if (j.live) return liveStart(j);
+        return classicShow(j);
       }).catch(function () { state("Aloqa xatosi. Sahifani yangilang."); });
     }).catch(function () {
       noMic("Mikrofon yopiq", "Telegram sozlamasidan mikrofonga ruxsat bering va qayta oching.");
@@ -227,6 +315,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
   function stopRec() { try { if (recorder && recorder.state !== "inactive") recorder.stop(); } catch (e) {} }
 
   function micToggle() {
+    if (live && !live.closed) return liveMute();
     if (busy || !mic) return;
     if (rec) return stopRec();
     if (speaking) { speaking = false; stopSpeak(); }
@@ -325,6 +414,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
   try { if (window.Telegram && Telegram.WebApp) { Telegram.WebApp.ready(); Telegram.WebApp.expand(); } } catch (e) {}
   $("b-go").onclick = begin; $("b-mic").onclick = micToggle;
   $("b-end").onclick = function () {
+    if (live && !live.closed) { try { live.ws.send(JSON.stringify({ t: "end" })); } catch (e) {} var L0 = live; setTimeout(function () { if (!L0.closed) { liveCleanup(); finish({ cta: "Yaxshi gaplashdik! Botga qayting 👇" }); } }, 2500); return; }
     speaking = false; stopSpeak(); stopRec();
     fetch("ai/end", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token }) }).catch(function () {});
     finish({ cta: "Yaxshi gaplashdik! Botga qayting 👇" });
