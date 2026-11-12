@@ -345,7 +345,7 @@ try:
 except ValueError:
     BASE_PITCH = -10
 PROSODY = {k: (v[0], "%+dHz" % (BASE_PITCH + v[1]), v[2]) for k, v in
-           {"angry": ("-4%", 7, "+20%"), "cry": ("-22%", -4, "-10%"), "happy": ("-8%", 5, "+0%"), "normal": ("-12%", 1, "+0%")}.items()}
+           {"angry": ("+4%", 7, "+20%"), "cry": ("-16%", -4, "-10%"), "happy": ("-1%", 5, "+0%"), "normal": ("-3%", 1, "+0%")}.items()}
 
 
 UZ_VOICE = os.getenv("UZ_VOICE", "uz-UZ-MadinaNeural")   # boshqa: uz-UZ-SardorNeural (erkak)

@@ -248,7 +248,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
         for (var i = 0; i < buf.length; i++) mx = Math.max(mx, Math.abs(buf[i] - 128));
         var now = Date.now();
         if (mx > 14) { spoke = true; silent = 0; } else if (spoke && !silent) silent = now;
-        if ((spoke && silent && now - silent > 1600) || now - t0 > 30000) stopRec();
+        if ((spoke && silent && now - silent > 1000) || now - t0 > 30000) stopRec();
       }, 150);
     } catch (e) { timer = setInterval(function () { if (Date.now() - t0 > 30000) stopRec(); }, 500); }
     recorder.start(); rec = true; setAv("idle"); $("b-mic").classList.add("rec"); state("Eshityapman… gapirib bo'lgach tugmani bosing");
