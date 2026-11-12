@@ -117,8 +117,28 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
       } catch (e) { res(); }
     });
   }
-  var spkId = 0;
-  function stopSpeak() { spkId++; try { if (audio) audio.pause(); } catch (e) {} if (playRes) playRes(); }
+  var spkId = 0, Q = [], qPlaying = false, qEnd = null, qPlayed = false;
+  function stopSpeak() { spkId++; Q = []; qPlaying = false; qEnd = null; try { if (audio) audio.pause(); } catch (e) {} if (playRes) playRes(); }
+  // oqimli ovoz navbati: har jumla tayyor bo'lishi bilan ovozi so'raladi va ketma-ket chaladi
+  function qAdd(text, lang, emo) { if (!text) return; Q.push(fetchTts(text, lang, emo)); qPump(); }
+  function qPump() {
+    if (qPlaying) return;
+    var p = Q.shift(), my = spkId;
+    if (!p) { if (qEnd) { var f = qEnd; qEnd = null; f(); } return; }
+    qPlaying = true;
+    p.then(function (b64) {
+      if (my !== spkId) return;
+      if (!b64) { qPlaying = false; return qPump(); }
+      qPlayed = true;
+      try {
+        audio = new Audio("data:audio/mpeg;base64," + b64);
+        audio.onended = function () { if (my !== spkId) return; qPlaying = false; qPump(); };
+        audio.onerror = audio.onended;
+        var pr = audio.play(); if (pr && pr.catch) pr.catch(function () { if (my === spkId) { qPlaying = false; qPump(); } });
+      } catch (e) { qPlaying = false; qPump(); }
+    });
+  }
+  function qWhenDone(fn) { qEnd = fn; qPump(); }
   function chunkText(t) {
     var a = (t || "").match(/[^.!?…]+[.!?…]*/g) || [t || ""], out = [], cur = "";
     a.forEach(function (x) { cur += (cur ? " " : "") + x.trim(); if (cur.length >= 50) { out.push(cur); cur = ""; } });
@@ -236,22 +256,63 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 
   function send(blob, dur) {
     busy = true; $("b-mic").disabled = true; state("Rumiyo o'ylayapti…");
+    var bubble = null, uzAcc = "", spoke = false, final = null, myId = ++spkId;
+    Q = []; qPlaying = false; qEnd = null; qPlayed = false;
+    function ensureBubble() {
+      if (bubble) return;
+      bubble = document.createElement("div"); bubble.className = "m ai"; $("log").appendChild(bubble);
+    }
+    function startSpeaking(emo) {
+      if (spoke) return; spoke = true; busy = false; speaking = true; setAv(emoClip(emo));
+      $("b-mic").disabled = false; state("Gapirish uchun tugmani bosing (Rumiyo to'xtaydi)");
+    }
+    function speechEnded(j) {
+      speaking = false;
+      if (j.done) return finish(j);
+      if (rec) return;
+      setAv("idle"); $("b-mic").disabled = false; state("Tugmani bosib javob bering");
+    }
+    function onEvent(o) {
+      if (myId !== spkId) return;
+      if (o.t === "heard") { log("me", o.heard); }
+      else if (o.t === "uz") {
+        ensureBubble(); uzAcc += (uzAcc ? " " : "") + o.text; bubble.textContent = uzAcc;
+        startSpeaking(o.emo); qAdd(o.text, "uz", o.emo); $("log").scrollTop = 1e9;
+      } else if (o.t === "error") {
+        busy = false; speaking = false; $("b-mic").disabled = false; state(o.error + " Tugmani bosing");
+      } else if (o.t === "final") {
+        final = o;
+        if (o.fix) log("fix", "✏️ " + o.fix);
+        ensureBubble();
+        if (!spoke) { bubble.textContent = o.uz || ""; startSpeaking(o.emo); chunkText(o.uz).forEach(function (t) { qAdd(t, "uz", o.emo); }); }
+        if (o.ru) { var b = document.createElement("b"); b.className = "ru"; b.textContent = "🇷🇺 " + o.ru; bubble.appendChild(b); qAdd(o.ru, "ru", o.emo); }
+        setLeft(o.left); setAv(emoClip(o.emo)); $("log").scrollTop = 1e9;
+        var hold = Math.min(6000, 1200 + ((o.uz || "").length + (o.ru || "").length) * 60);
+        qWhenDone(function () { if (myId !== spkId) return; if (qPlayed) speechEnded(o); else setTimeout(function () { if (myId === spkId) speechEnded(o); }, hold); });
+      }
+    }
     fetch("ai/turn", { method: "POST", headers: { "X-Token": token, "X-Dur": String(dur), "Content-Type": (blob.type || "audio/webm").split(";")[0] }, body: blob })
-      .then(function (r) { return r.json().then(function (j) { j._st = r.status; return j; }); })
-      .then(function (j) {
-        if (j.done && !(j.ru || j.uz)) return finish(j);
-        if (j.error) { busy = false; $("b-mic").disabled = false; return state(j.error + " Tugmani bosing"); }
-        log("me", j.heard); if (j.fix) log("fix", "✏️ " + j.fix);
-        aiLog(j); setLeft(j.left); setAv(emoClip(j.emo));
-        busy = false;
-        if (!j.done) { speaking = true; $("b-mic").disabled = false; state("Gapirish uchun tugmani bosing (Rumiyo to'xtaydi)"); }
-        return speak(j).then(function () {
-          speaking = false;
-          if (j.done) return finish(j);
-          if (rec) return;
-          setAv("idle"); $("b-mic").disabled = false; state("Tugmani bosib javob bering");
-        });
-      }).catch(function () { busy = false; $("b-mic").disabled = false; state("Aloqa xatosi. Tugmani qayta bosing"); });
+      .then(function (r) {
+        var ct = r.headers.get("Content-Type") || "";
+        if (ct.indexOf("ndjson") < 0) {          // oddiy JSON: xato yoki vaqt tugagan
+          return r.json().then(function (j) {
+            if (j.done && !(j.ru || j.uz)) return finish(j);
+            busy = false; $("b-mic").disabled = false; state((j.error || "Xatolik.") + " Tugmani bosing");
+          });
+        }
+        var rd = r.body && r.body.getReader ? r.body.getReader() : null, dec = new TextDecoder(), buf = "";
+        if (!rd) return r.text().then(function (t) { t.split("\n").forEach(function (l) { if (l.trim()) onEvent(JSON.parse(l)); }); });
+        function pump() {
+          return rd.read().then(function (x) {
+            if (x.done) { if (buf.trim()) { try { onEvent(JSON.parse(buf)); } catch (e) {} } return; }
+            buf += dec.decode(x.value, { stream: true });
+            var parts = buf.split("\n"); buf = parts.pop();
+            parts.forEach(function (l) { if (l.trim()) { try { onEvent(JSON.parse(l)); } catch (e) {} } });
+            return pump();
+          });
+        }
+        return pump();
+      }).catch(function () { if (myId !== spkId) return; busy = false; $("b-mic").disabled = false; state("Aloqa xatosi. Tugmani qayta bosing"); });
   }
 
   try { if (window.Telegram && Telegram.WebApp) { Telegram.WebApp.ready(); Telegram.WebApp.expand(); } } catch (e) {}

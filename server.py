@@ -597,6 +597,177 @@ async def reply_for(info, ses, dinfo, user_text, left):
     return ru, uz, fix, wrap, emo
 
 
+# ---------- OQIM (streaming): AI birinchi gapni yozishi bilanoq ovozga ketadi ----------
+class StreamErr(Exception):
+    def __init__(self, status):
+        self.status = status
+
+
+def _note_err(url, status, txt):
+    print("HTTP", status, url.split("?")[0], txt[:240].replace("\n", " "))
+    host = url.split("?")[0].split("//")[-1].split("/")[0]
+    LAST_ERR[host.split(".")[0][:14] if "googleapis" not in host else "gemini"] = "%s %s" % (status, txt[:110].replace("\n", " "))
+
+
+async def sse_json(http, url, headers, body):
+    hd = {"User-Agent": "Mozilla/5.0 (compatible; RumiyoServer/1.0)"}
+    hd.update(headers or {})
+    async with http.post(url, headers=hd, json=body, timeout=aiohttp.ClientTimeout(total=45, sock_read=20)) as r:
+        if r.status != 200:
+            _note_err(url, r.status, await r.text())
+            raise StreamErr(r.status)
+        async for raw in r.content:
+            line = raw.decode("utf-8", "ignore").strip()
+            if not line.startswith("data:"):
+                continue
+            d = line[5:].strip()
+            if d == "[DONE]":
+                return
+            try:
+                yield json.loads(d)
+            except ValueError:
+                continue
+
+
+async def oa_stream(http, url, key, body):
+    async for v in sse_json(http, url, {"Authorization": "Bearer " + key}, dict(body, stream=True)):
+        ch = v.get("choices") or []
+        if ch:
+            t = (ch[0].get("delta") or {}).get("content")
+            if t:
+                yield t
+
+
+async def gem_stream(http, model, key, body):
+    url = f"{GEMINI}/models/{model}:streamGenerateContent?alt=sse&key={key}"
+    b2 = dict(body); gc = dict(b2.get("generationConfig", {})); gc["thinkingConfig"] = {"thinkingBudget": 0}; b2["generationConfig"] = gc
+    got = False
+    try:
+        async for v in sse_json(http, url, {}, b2):
+            for c in (v.get("candidates") or [])[:1]:
+                for part in (c.get("content") or {}).get("parts") or []:
+                    if part.get("text"):
+                        got = True
+                        yield part["text"]
+        return
+    except StreamErr as e:
+        if got or e.status != 400:
+            raise
+    async for v in sse_json(http, url, {}, body):      # o'ylash sozlamasi qabul qilinmasa, oddiy so'rov
+        for c in (v.get("candidates") or [])[:1]:
+            for part in (c.get("content") or {}).get("parts") or []:
+                if part.get("text"):
+                    yield part["text"]
+
+
+def _stream_sources(msgs, temp):
+    """(provayder, kalit, oqim-yaratuvchi) ro'yxati, LLM_ORDER tartibida."""
+    out = []
+    sys_txt, cont = gem_contents(msgs)
+    gbody = {"systemInstruction": {"parts": [{"text": sys_txt}]}, "contents": cont, "generationConfig": {"temperature": temp, "maxOutputTokens": 500}}
+    for prov in LLM_ORDER:
+        if prov == "groq":
+            for k in rotated("groq"):
+                for m in LLM_MODELS:
+                    body = {"model": m, "messages": msgs, "temperature": temp, "max_tokens": 300}
+                    if m.startswith("openai/gpt-oss"):
+                        body.update({"reasoning_effort": "low", "include_reasoning": False, "max_tokens": 700})
+                    out.append(("groq", k, lambda http, k=k, body=body: oa_stream(http, GROQ + "/chat/completions", k, body)))
+        elif prov == "openrouter":
+            for k in rotated("openrouter"):
+                body = {"model": OR_MODEL, "messages": msgs, "temperature": temp, "max_tokens": 300}
+                out.append(("openrouter", k, lambda http, k=k, body=body: oa_stream(http, OPENROUTER + "/chat/completions", k, body)))
+        elif prov == "gemini":
+            for m in GEMINI_MODELS:
+                for k in rotated("gemini"):
+                    out.append(("gemini", k, lambda http, k=k, m=m: gem_stream(http, m, k, gbody)))
+    return out
+
+
+async def llm_stream(msgs, temp=0.95):
+    async with aiohttp.ClientSession() as http:
+        for prov, k, mk in _stream_sources(msgs, temp):
+            got = False
+            try:
+                async for t in mk(http):
+                    got = True
+                    yield t
+                if got:
+                    return
+            except StreamErr as e:
+                if got:
+                    return
+                if e.status in (401, 402, 403):
+                    key_bad[k] = time.time()
+            except (aiohttp.ClientError, asyncio.TimeoutError):
+                if got:
+                    return
+    raise Busy("stream")
+
+
+_TAGS = re.compile(r"\n\s*(RU|FIX|EMO|Q)\s*:", re.I)
+
+
+async def reply_stream(info, ses, dinfo, user_text, left, emit):
+    """reply_for ning oqimli varianti: UZ qatorining har bir tayyor jumlasi emit() bilan darhol yuboriladi."""
+    humor = humor_level()
+    n = {0: 2, 1: 3, 2: 4, 3: 5}[humor]
+    ex = G.find(user_text, n=n - 1, humor=humor) if user_text and not user_text.startswith("(") else []
+    if len(ex) < n:
+        ex += G.sample(n - len(ex), humor)
+    wrap = left <= 50
+    sysmsg, nxt = build_system(info, ses, dinfo, ex, left, wrap)
+    hist = ses["hist"] + [{"role": "user", "content": user_text}]
+    base = [{"role": "system", "content": sysmsg}] + hist
+    emo_guess = ses.get("emo") or "angry"
+    buf, pos, pending, emitted = "", 0, "", []
+
+    async def flush(final=False):
+        nonlocal pos, pending
+        m0 = re.search(r"UZ:\s*", buf, re.I)
+        if not m0:
+            return
+        start = m0.end()
+        mt = _TAGS.search(buf, start)
+        region = buf[start:mt.start()] if mt else buf[start:]
+        line_done = bool(mt) or final
+        while True:
+            rem = region[pos:]
+            m = re.match(r"\s*(.+?[.!?\u2026]+[\u00bb\"')\u201d]*)(?=\s|$)", rem, re.S) if (line_done or re.search(r"[.!?\u2026]+[\u00bb\"')\u201d]*\s", rem)) else None
+            if not m:
+                break
+            pending += (" " if pending else "") + m.group(1).strip()
+            pos += m.end()
+            if len(pending) >= (12 if not emitted else 30):
+                emitted.append(pending); await emit({"t": "uz", "text": pending, "emo": emo_guess}); pending = ""
+        if line_done and pending:
+            emitted.append(pending); await emit({"t": "uz", "text": pending, "emo": emo_guess}); pending = ""
+
+    async for delta in llm_stream(base, 0.95):
+        buf += delta
+        await flush()
+    await flush(final=True)
+    ru, uz, fix, quiz, emo = parse(buf)
+    done_txt = " ".join(emitted).strip()
+    tail = ""
+    if uz:
+        tail = uz[len(done_txt):].strip() if (done_txt and uz.startswith(done_txt)) else ("" if done_txt else uz)
+    if tail:
+        await emit({"t": "uz", "text": tail, "emo": emo_guess})
+    if quiz:
+        ses["quiz"] = quiz
+        if nxt:
+            ses["asked"].append(nxt[0])
+    elif ses.get("quiz") and ses["turns"] > 0:
+        ses["quiz"] = None
+    ses["hist"] = (hist + [{"role": "assistant", "content": f"UZ: {uz}\nRU: {ru}"}])[-mem_msgs():]
+    ses["turns"] += 1
+    if emo == "normal" and not wrap and (fix or humor_level() >= 2):
+        emo = "angry"
+    ses["emo"] = emo
+    return ru, uz, fix, wrap, emo
+
+
 # ---------- endpoints ----------
 async def ai_start(request):
     try:
@@ -663,30 +834,60 @@ async def ai_turn(request):
         dur = 5
     ses = get_session(info)
     dinfo = await day_info(info.get("d"))
+    t0 = time.time()
     try:
         async with gate:
             heard, foreign = await stt(raw, request.headers.get("Content-Type", ""))
-            if not heard:
-                return web.json_response({"error": "Ovozni eshita olmadim. Aniqroq gapiring."}, status=422)
-            said = heard
-            if foreign:
-                said = ("(o'quvchining nutqi na o'zbekcha, na ruscha eshitildi; eshitilgani: «%s». Jahl bilan «o'z tilingni unutdingmi?» deb koy va "
-                        "o'zbekcha yoki ruscha gapirishni talab qil.)" % heard[:60])
-            ru, uz, fix, wrap, emo = await reply_for(info, ses, dinfo, said, left)
     except Busy:
         return web.json_response({"error": "Rumiyo hozir band. Bir oz kutib, qayta urinib ko'ring. [sabab: " + ("; ".join("%s %s" % kv for kv in LAST_ERR.items()) or "noma'lum") + "]"}, status=429)
     except Exception as e:
         print("turn xato:", type(e).__name__, str(e)[:200])
         return web.json_response({"error": "Xatolik bo'ldi, vaqtingizdan hisoblanmadi. Qayta urinib ko'ring."}, status=500)
-    add_use(uid, dur + min(20, len(ru) // 14 + 2))
+    if not heard:
+        return web.json_response({"error": "Ovozni eshita olmadim. Aniqroq gapiring."}, status=422)
+    t_stt = time.time() - t0
+    resp = web.StreamResponse(headers={"Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    await resp.prepare(request)
+
+    async def emit(o):
+        await resp.write((json.dumps(o, ensure_ascii=False) + "\n").encode("utf-8"))
+
+    first = [None]
+
+    async def emit_t(o):
+        if o.get("t") == "uz" and first[0] is None:
+            first[0] = time.time() - t0
+        await emit(o)
+
+    await emit({"t": "heard", "heard": heard})
+    said = heard
+    if foreign:
+        said = ("(o'quvchining nutqi na o'zbekcha, na ruscha eshitildi; eshitilgani: «%s». Jahl bilan «o'z tilingni unutdingmi?» deb koy va "
+                "o'zbekcha yoki ruscha gapirishni talab qil.)" % heard[:60])
+    try:
+        async with gate:
+            ru, uz, fix, wrap, emo = await reply_stream(info, ses, dinfo, said, left, emit_t)
+    except Busy:
+        await emit({"t": "error", "error": "Rumiyo hozir band. Bir oz kutib, qayta urinib ko'ring. [sabab: " + ("; ".join("%s %s" % kv for kv in LAST_ERR.items()) or "noma'lum") + "]"})
+        await resp.write_eof()
+        return resp
+    except Exception as e:
+        print("turn xato:", type(e).__name__, str(e)[:200])
+        await emit({"t": "error", "error": "Xatolik bo'ldi, vaqtingizdan hisoblanmadi. Qayta urinib ko'ring."})
+        await resp.write_eof()
+        return resp
+    add_use(uid, dur + min(20, (len(uz) + len(ru)) // 14 + 2))
     left = left_for(uid)
     done = left <= 0 or wrap
     if done:
         asyncio.create_task(update_notes(uid, list(ses["hist"])))
-    out = {"heard": heard, "ru": ru, "uz": uz, "fix": fix, "emo": emo, "audio": "", "left": left, "done": done}
+    print("turn: eshitish %.1fs, birinchi gap %.1fs, jami %.1fs" % (t_stt, first[0] or -1, time.time() - t0))
+    out = {"t": "final", "heard": heard, "ru": ru, "uz": uz, "fix": fix, "emo": emo, "left": left, "done": done}
     if done:
         out.update({"cta": cta_text(), "bot": BOT_URL})
-    return web.json_response(out)
+    await emit(out)
+    await resp.write_eof()
+    return resp
 
 
 async def ai_end(request):
