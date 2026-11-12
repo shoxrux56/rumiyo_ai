@@ -117,7 +117,45 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
       } catch (e) { res(); }
     });
   }
-  function stopSpeak() { try { if (audio) audio.pause(); } catch (e) {} if (playRes) playRes(); }
+  var spkId = 0;
+  function stopSpeak() { spkId++; try { if (audio) audio.pause(); } catch (e) {} if (playRes) playRes(); }
+  function chunkText(t) {
+    var a = (t || "").match(/[^.!?…]+[.!?…]*/g) || [t || ""], out = [], cur = "";
+    a.forEach(function (x) { cur += (cur ? " " : "") + x.trim(); if (cur.length >= 50) { out.push(cur); cur = ""; } });
+    if (cur) out.push(cur);
+    return out.filter(function (x) { return x.trim(); });
+  }
+  function fetchTts(text, lang, emo) {
+    return fetch("ai/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token, text: text, lang: lang, emo: emo }) })
+      .then(function (r) { return r.json(); }).then(function (j) { return j.audio || ""; }).catch(function () { return ""; });
+  }
+  // matn tayyor: hamma bo'lak ovozi bir vaqtda so'raladi, birinchisi tayyor bo'lishi bilan gapira boshlaydi
+  function speakParts(j) {
+    var parts = chunkText(j.uz).map(function (t) { return { t: t, l: "uz" }; });
+    if (j.ru) parts.push({ t: j.ru, l: "ru" });
+    var my = ++spkId, fs = parts.map(function (p) { return fetchTts(p.t, p.l, j.emo); }), i = 0, played = false;
+    return new Promise(function (res0) {
+      var done = false;
+      var res = function () { if (done) return; done = true; playRes = null; res0(); };
+      playRes = res;
+      function next() {
+        if (done || my !== spkId) return res();
+        if (i >= fs.length) return played ? res() : setTimeout(res, Math.min(6000, 1200 + ((j.uz || "").length + (j.ru || "").length) * 60));
+        fs[i++].then(function (b64) {
+          if (done || my !== spkId) return res();
+          if (!b64) return next();
+          played = true;
+          try {
+            audio = new Audio("data:audio/mpeg;base64," + b64);
+            audio.onended = next; audio.onerror = next;
+            var p = audio.play(); if (p && p.catch) p.catch(next);
+          } catch (e) { next(); }
+        });
+      }
+      next();
+    });
+  }
+  function speak(j) { return j.audio ? play(j.audio, (j.uz || "") + " " + (j.ru || "")) : speakParts(j); }
   function post(path, opts) { return fetch(path, opts).then(function (r) { return r.json().then(function (j) { j._st = r.status; return j; }); }); }
   function stopMic() { if (mic) { mic.getTracks().forEach(function (t) { t.stop(); }); mic = null; } }
 
@@ -154,7 +192,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
         $("c-topic").textContent = j.topic ? "Mavzu: " + j.topic : "";
         setLeft(j.left); aiLog(j); setAv(emoClip(j.emo));
         speaking = true; $("b-mic").disabled = false; state("Gapirish uchun tugmani bosing (Rumiyo to'xtaydi)");
-        return play(j.audio, (j.uz || "") + " " + (j.ru || "")).then(function () { speaking = false; if (rec) return; setAv("idle"); $("b-mic").disabled = false; state("Tugmani bosib ruscha javob bering"); });
+        return speak(j).then(function () { speaking = false; if (rec) return; setAv("idle"); $("b-mic").disabled = false; state("Tugmani bosib ruscha javob bering"); });
       }).catch(function () { state("Aloqa xatosi. Sahifani yangilang."); });
     }).catch(function () {
       noMic("Mikrofon yopiq", "Telegram sozlamasidan mikrofonga ruxsat bering va qayta oching.");
@@ -207,7 +245,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
         aiLog(j); setLeft(j.left); setAv(emoClip(j.emo));
         busy = false;
         if (!j.done) { speaking = true; $("b-mic").disabled = false; state("Gapirish uchun tugmani bosing (Rumiyo to'xtaydi)"); }
-        return play(j.audio, (j.uz || "") + " " + (j.ru || "")).then(function () {
+        return speak(j).then(function () {
           speaking = false;
           if (j.done) return finish(j);
           if (rec) return;

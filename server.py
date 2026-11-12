@@ -274,11 +274,16 @@ async def stt(raw, ctype):
                     if st == 200:
                         lang = (j.get("language") or "").lower()
                         text = (j.get("text") or "").strip()
+                        foreign = False
                         if lang not in ("russian", "uzbek") and text:   # noto'g'ri til (masalan, islandcha): qayta, to'g'ri tilda
                             st2, j2 = await call(k, m, "uz" if lang in TURKIC else "ru")
                             if st2 == 200 and (j2.get("text") or "").strip():
                                 text = j2["text"].strip()
-                        return text
+                            letters = [c for c in text if c.isalpha()]
+                            cyr = sum(1 for c in letters if "\u0400" <= c <= "\u04ff")
+                            lat_uz = lang in TURKIC
+                            foreign = bool(letters) and not lat_uz and cyr / len(letters) < 0.5   # na ruscha, na o'zbekcha
+                        return text, foreign
                 except (aiohttp.ClientError, asyncio.TimeoutError):
                     key_bad[k] = time.time()
                     break
@@ -296,13 +301,18 @@ async def stt(raw, ctype):
                 continue
             if st == 200:
                 try:
-                    return j["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    return j["candidates"][0]["content"]["parts"][0]["text"].strip(), False
                 except (KeyError, IndexError):
                     continue
     raise Busy("stt")
 
 
-PROSODY = {"angry": ("-4%", "+5Hz", "+20%"), "cry": ("-22%", "-6Hz", "-10%"), "happy": ("-8%", "+4Hz", "+0%"), "normal": ("-12%", "+1Hz", "+0%")}
+try:
+    BASE_PITCH = int(os.getenv("VOICE_PITCH", "-10"))   # manfiy = qalinroq, ustozga xos; 0 = oddiy
+except ValueError:
+    BASE_PITCH = -10
+PROSODY = {k: (v[0], "%+dHz" % (BASE_PITCH + v[1]), v[2]) for k, v in
+           {"angry": ("-4%", 7, "+20%"), "cry": ("-22%", -4, "-10%"), "happy": ("-8%", 5, "+0%"), "normal": ("-12%", 1, "+0%")}.items()}
 
 
 UZ_VOICE = os.getenv("UZ_VOICE", "uz-UZ-MadinaNeural")   # boshqa: uz-UZ-SardorNeural (erkak)
@@ -575,13 +585,30 @@ async def ai_start(request):
     try:
         async with gate:
             ru, uz, _fix, _w, emo = await reply_for(info, ses, dinfo, opener, left)
-            audio = await tts_dual(uz, ru, emo) if (uz or ru) else b""
+            audio = b""
     except Exception as e:
         print("start:", type(e).__name__, str(e)[:160])
         ru, uz, audio, emo = "Привет! Я Румиё. Давай поболтаем про сегодняшний урок!", "Salom! Men Rumiyoman. Keling, bugungi dars haqida gaplashamiz!", b"", "normal"
         ses["hist"].append({"role": "assistant", "content": f"UZ: {uz}\nRU: {ru}"})
     return web.json_response({"ru": ru, "uz": uz, "emo": emo, "audio": base64.b64encode(audio).decode(), "left": left,
                               "topic": topic, "returning": again, "bot": BOT_URL})
+
+
+async def ai_tts(request):
+    """Matn tayyor bo'lgach, ovoz bo'laklab (parallel) so'raladi: matn darhol ko'rinadi, ovoz birinchi bo'lak tayyor bo'lishi bilan boshlanadi."""
+    try:
+        j = await request.json()
+    except Exception:
+        return web.json_response({"audio": ""})
+    if not verify(j.get("token")):
+        return web.json_response({"error": "Havola eskirgan."}, status=403)
+    text = (j.get("text") or "")[:400].strip()
+    if not text:
+        return web.json_response({"audio": ""})
+    voice = RU_VOICE if j.get("lang") == "ru" else UZ_VOICE
+    emo = j.get("emo") if j.get("emo") in PROSODY else "normal"
+    a = await tts_safe(text, emo, voice)
+    return web.json_response({"audio": base64.b64encode(a).decode()})
 
 
 async def ai_turn(request):
@@ -603,11 +630,14 @@ async def ai_turn(request):
     dinfo = await day_info(info.get("d"))
     try:
         async with gate:
-            heard = await stt(raw, request.headers.get("Content-Type", ""))
+            heard, foreign = await stt(raw, request.headers.get("Content-Type", ""))
             if not heard:
                 return web.json_response({"error": "Ovozni eshita olmadim. Aniqroq gapiring."}, status=422)
-            ru, uz, fix, wrap, emo = await reply_for(info, ses, dinfo, heard, left)
-            audio = await tts_dual(uz, ru, emo) if (uz or ru) else b""
+            said = heard
+            if foreign:
+                said = ("(o'quvchining nutqi na o'zbekcha, na ruscha eshitildi; eshitilgani: «%s». Jahl bilan «o'z tilingni unutdingmi?» deb koy va "
+                        "o'zbekcha yoki ruscha gapirishni talab qil.)" % heard[:60])
+            ru, uz, fix, wrap, emo = await reply_for(info, ses, dinfo, said, left)
     except Busy:
         return web.json_response({"error": "Rumiyo hozir band. Bir oz kutib, qayta urinib ko'ring. [sabab: " + (LAST_ERR[0] or "noma'lum") + "]"}, status=429)
     except Exception as e:
@@ -618,7 +648,7 @@ async def ai_turn(request):
     done = left <= 0 or wrap
     if done:
         asyncio.create_task(update_notes(uid, list(ses["hist"])))
-    out = {"heard": heard, "ru": ru, "uz": uz, "fix": fix, "emo": emo, "audio": base64.b64encode(audio).decode(), "left": left, "done": done}
+    out = {"heard": heard, "ru": ru, "uz": uz, "fix": fix, "emo": emo, "audio": "", "left": left, "done": done}
     if done:
         out.update({"cta": cta_text(), "bot": BOT_URL})
     return web.json_response(out)
@@ -767,6 +797,7 @@ def add_routes(app, prefix=""):
     app.router.add_post(p + "/ai/start", ai_start)
     app.router.add_post(p + "/ai/turn", ai_turn)
     app.router.add_post(p + "/ai/end", ai_end)
+    app.router.add_post(p + "/ai/tts", ai_tts)
     app.router.add_post(p + "/admin/add", admin_add)
     app.router.add_post(p + "/admin/sync", admin_sync)
     app.router.add_get(p + "/admin/count", admin_count)
