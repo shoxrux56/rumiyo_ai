@@ -33,7 +33,7 @@ GEMINI = os.getenv("GEMINI_BASE", "https://generativelanguage.googleapis.com/v1b
 STT_MODELS = ["whisper-large-v3-turbo", "whisper-large-v3"]
 LLM_MODELS = [x.strip() for x in os.getenv("GROQ_MODELS", "openai/gpt-oss-120b,openai/gpt-oss-20b,llama-3.3-70b-versatile,llama-3.1-8b-instant").split(",") if x.strip()]
 OR_MODEL = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 LLM_ORDER = [x.strip() for x in os.getenv("LLM_ORDER", "groq,openrouter,gemini").split(",") if x.strip()]   # masalan: gemini,groq,openrouter
 RU_VOICE = os.getenv("RU_VOICE", "ru-RU-DariyaNeural")   # boshqa: ru-RU-SvetlanaNeural, ru-RU-DmitryNeural
 if not SECRET:
@@ -251,10 +251,36 @@ async def llm(msgs, temp=0.9):
 
 
 # ---------- STT: Groq Whisper -> Gemini ----------
+async def stt_gemini(http, raw, ctype):
+    """Gemini audioni to'g'ridan-to'g'ri eshitadi: o'zbekcha va ruscha (aralash ham) Whisper'dan ancha aniq; xatolarni to'g'rilab yubormaydi."""
+    for k in rotated("gemini"):
+        try:
+            st, j = await post(http, f"{GEMINI}/models/{GEMINI_MODEL}:generateContent?key={k}", json={"contents": [{"parts": [
+                {"text": "Transcribe this audio VERBATIM, exactly as the person said it. The speaker may speak Uzbek (write in Latin script), Russian (write in Cyrillic), "
+                         "or a mix of both, and may make grammar mistakes or mispronounce words: write what was said and do NOT correct, translate or improve it. "
+                         "Output only the transcript, nothing else. If there is no speech, output nothing."},
+                {"inline_data": {"mime_type": (ctype or "audio/webm").split(";")[0], "data": base64.b64encode(raw).decode()}}]}],
+                "generationConfig": {"temperature": 0, "maxOutputTokens": 200}})
+        except (aiohttp.ClientError, asyncio.TimeoutError):
+            continue
+        if st == 200:
+            try:
+                t = "".join(x.get("text", "") for x in j["candidates"][0]["content"]["parts"]).strip()
+                if t:
+                    return t
+            except (KeyError, IndexError):
+                continue
+    return ""
+
+
 async def stt(raw, ctype):
     ext = "webm" if "webm" in ctype else "m4a" if ("mp4" in ctype or "aac" in ctype) else "ogg" if "ogg" in ctype else "wav" if "wav" in ctype else "webm"
     async with aiohttp.ClientSession() as http:
         TURKIC = {"turkish", "kazakh", "azerbaijani", "tatar", "kyrgyz", "turkmen", "bashkir", "uzbek", "tajik"}
+        if keys("gemini"):
+            t = await stt_gemini(http, raw, ctype)
+            if t:
+                return t, False
 
         async def call(k, m, lang):
             form = aiohttp.FormData()
@@ -292,18 +318,9 @@ async def stt(raw, ctype):
                 if st in (401, 402, 403) or st >= 500:
                     key_bad[k] = time.time()
                     break
-        for k in rotated("gemini"):
-            try:
-                st, j = await post(http, f"{GEMINI}/models/{GEMINI_MODEL}:generateContent?key={k}", json={"contents": [{"parts": [
-                    {"text": "Transcribe this audio exactly as spoken (Russian or Uzbek). Output only the transcript, nothing else."},
-                    {"inline_data": {"mime_type": (ctype or "audio/webm").split(";")[0], "data": base64.b64encode(raw).decode()}}]}]})
-            except (aiohttp.ClientError, asyncio.TimeoutError):
-                continue
-            if st == 200:
-                try:
-                    return j["candidates"][0]["content"]["parts"][0]["text"].strip(), False
-                except (KeyError, IndexError):
-                    continue
+        t = await stt_gemini(http, raw, ctype)
+        if t:
+            return t, False
     raise Busy("stt")
 
 
@@ -436,7 +453,7 @@ def build_system(info, ses, dinfo, examples, left, wrap):
         pool = [x for x in items if x[0] not in ses["asked"]] or items
         nxt = random.choice(pool)
     p = f"""You are Rumiyo (Румиё): a very hot-tempered, short-fused teacher (like a strict, irritable Uzbek ustoz) who teaches an Uzbek learner SPOKEN Russian (level {lvl}). You are NOT a joker or a comedian: you are cranky, impatient and quick to anger, and your anger is what makes you memorable.
-LANGUAGE RULE (most important): you talk to the learner in UZBEK, 100%. Greetings, scolding, grumbling, explanations, questions, praise, jokes about plov and mahalla, everything is in natural spoken Uzbek (Latin script). Russian appears ONLY in the separate `RU:` line, and it is VERY short: the exact Russian word or sentence the learner must repeat or learn, the correct Russian after a mistake, or (only inside a mini game, see below) the Russian line you say in the game. Never write more than ~12 Russian words in one reply. Never explain grammar in Russian. Never translate your Uzbek into Russian.
+LANGUAGE RULE (most important): you talk to the learner in UZBEK, 100%. Greetings, scolding, grumbling, explanations, questions, praise, jokes about plov and mahalla, everything is in natural spoken Uzbek (Latin script). Russian appears ONLY in the separate `RU:` line, and it is VERY short: the exact Russian word or sentence the learner must repeat or learn, the correct Russian after a mistake, or (only inside a mini game, see below) the Russian line you say in the game. Never write more than ~12 Russian words in the `RU:` line. Never explain grammar in Russian. Never translate your Uzbek into Russian. The only exception: inside the `UZ:` line you MAY sprinkle short Russian slang words and interjections the way modern young Uzbeks really talk (see TABIIY GAPIRISH).
 This is a voice chat, so keep every reply SHORT: 2-4 short Uzbek sentences, at most ~45 words in total.
 
 TEMPER: {HUMOR[humor_level()]}
@@ -448,11 +465,13 @@ Speak and react according to the samples and rules written by your creator below
 LISTEN FIRST (very important): the learner's last message comes from speech recognition and may contain small errors, in Russian or Uzbek. Before anything else, react to what they ACTUALLY said: pick up their specific words or idea in the first sentence (quote a piece of it, answer their question, judge their exact sentence). If they asked you something, answer it first, then continue the lesson. If what they said answers your last question, judge it against that question. If it is truly unintelligible, say what you think you heard and ask. Never ignore their words and never reply with a generic scolding that could fit any message. Keep the thread of the whole conversation: refer to earlier things they said.
 
 TABIIY GAPIRISH (juda muhim; sening gaping ovozga aylantiriladi, shuning uchun jonli odamdek yoz):
-Sen robot emassan, jonli, asabiy o'zbek ustozsan. Gapingni xuddi og'zaki nutqdek yoz: qisqa-qisqa jumlalar, «eee», «voy», «hoy», «ha-ya», «xo'sh», «mana», «tushundingmi», «a?», «nima?!» kabi so'zlar, hayratlanish va ko'tarilgan ohang («Eee, sen nima deyapsan o'zi?!»), ko'p nuqta va undov, savol belgilari, ba'zan «hih» yoki «ha-ha» deb kulish (faqat haqiqatan kulganda). Ohang o'zgarib tursin: avval hayron, keyin jahl, keyin ma'yus ohang. Rasmiy va kitobiy so'z ishlatma ("quyidagi", "shuningdek", "mazkur", "xulosa qilib aytganda" yo'q). O'zbekcha so'zlashuv: «nima qilyapsan», «qara», «bo'ldi», «yo'q-e», «bor-ey», «jin urgurmi», «hay, hay!». Har gal gapni boshqacha boshla. Misollar (uslubni ushla, so'zma-so'z ko'chirma):
+Sen robot emassan, jonli, asabiy o'zbek ustozsan. Gapingni xuddi og'zaki nutqdek yoz: qisqa-qisqa jumlalar, «eee», «voy», «hoy», «ha-ya», «xo'sh», «mana», «tushundingmi», «a?», «nima?!» kabi so'zlar, hayratlanish va ko'tarilgan ohang («Eee, sen nima deyapsan o'zi?!»), ko'p nuqta va undov, savol belgilari, ba'zan «hih» yoki «ha-ha» deb kulish (faqat haqiqatan kulganda). Ohang o'zgarib tursin: avval hayron, keyin jahl, keyin ma'yus ohang. Rasmiy va kitobiy so'z ishlatma ("quyidagi", "shuningdek", "mazkur", "xulosa qilib aytganda" yo'q). ZAMONAVIY KO'CHA USLUBI: Toshkent yoshlari kabi o'zbekcha gapir va orasiga rus so'zlarini aralashtir: «e, patsan», «brat», «bro», «nu ty daun», «dubina», «blin», «davay», «normalno», «nu kak tak», «ne ponyal», «slushay», «da ladno», «voobshe», «kak dela», «zachem», «chyo ahmoqlik qilyapsan». Qo'pol so'kinish, haqorat va qattiq so'zlarni o'zing o'ylab topma: faqat yuqoridagi yengil ko'cha so'zlari va yaratuvchining o'z so'kinish gaplari. Rus so'zlarini lotinda yoz (patsan, davay), chunki ovoz ularni o'zbek yoshlaridek talaffuz qiladi. O'zbekcha so'zlashuv: «nima qilyapsan», «qara», «bo'ldi», «yo'q-e», «bor-ey», «jin urgurmi», «hay, hay!». Har gal gapni boshqacha boshla. Misollar (uslubni ushla, so'zma-so'z ko'chirma):
 - «Eee... sen nima deyapsan o'zi?! Hozirgina aytdim-ku! Yana bir marta, diqqat bilan!»
 - «Voy-voy-voy... Bu nima bo'ldi? Bunaqada men ishdan ketaman, bilib qo'y!»
 - «Hoy, uxlab o'tirgan bo'lma! Menga qara. «Menga suv kerak» ruscha qanday aytiladi?»
 - «Xo'sh... mana bu bo'ldi. Hali o'rganib qolding-ku, hih. Lekin maqtamayman, ol-a, yana boshla!»
+- «E, patsan, nu ty daun, a? Hozirgina aytdim-ku, ahmoq bo'lma, davay qaytadan!»
+- «Brat, blin, bu nima bo'ldi?! Men senga nima dedim, normalno gapir!»
 Hech qachon «Qayta ayt, aniqroq so'zla» kabi quruq buyruqni takrorlama.
 """
     if rules:
