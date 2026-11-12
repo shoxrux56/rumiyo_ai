@@ -34,6 +34,7 @@ STT_MODELS = ["whisper-large-v3-turbo", "whisper-large-v3"]
 LLM_MODELS = [x.strip() for x in os.getenv("GROQ_MODELS", "openai/gpt-oss-120b,openai/gpt-oss-20b,llama-3.3-70b-versatile,llama-3.1-8b-instant").split(",") if x.strip()]
 OR_MODEL = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+GEMINI_MODELS = list(dict.fromkeys([x.strip() for x in os.getenv("GEMINI_MODELS", GEMINI_MODEL + ",gemini-flash-lite-latest").split(",") if x.strip()]))   # biri band bo'lsa (503), keyingisi
 LLM_ORDER = [x.strip() for x in os.getenv("LLM_ORDER", "groq,openrouter,gemini").split(",") if x.strip()]   # masalan: gemini,groq,openrouter
 RU_VOICE = os.getenv("RU_VOICE", "ru-RU-DariyaNeural")   # boshqa: ru-RU-SvetlanaNeural, ru-RU-DmitryNeural
 if not SECRET:
@@ -126,7 +127,7 @@ def keys(kind):
     return list(dict.fromkeys(k for k in ks if isinstance(k, str) and k))
 
 
-LAST_ERR = [""]
+LAST_ERR = {}
 
 
 class Busy(Exception):
@@ -153,7 +154,8 @@ async def post(http, url, headers=None, **kw):
         txt = await r.text()
         if r.status != 200:   # sabab Render logida ko'rinsin (kalit yozilmaydi)
             print("HTTP", r.status, url.split("?")[0], txt[:240].replace("\n", " "))
-            LAST_ERR[0] = "%s %s %s" % (url.split("?")[0].split("//")[-1].split("/")[0][:24], r.status, txt[:140].replace("\n", " "))
+            host = url.split("?")[0].split("//")[-1].split("/")[0]
+            LAST_ERR[host.split(".")[0][:14] if "googleapis" not in host else "gemini"] = "%s %s" % (r.status, txt[:110].replace("\n", " "))
         try:
             return r.status, json.loads(txt)
         except ValueError:
@@ -218,23 +220,36 @@ def gem_contents(msgs):
     return sys_txt, cont
 
 
+async def gem_call(http, model, key, body):
+    """Gemini'da «o'ylash» tokenlari javobni kesib yubormasin: avval o'ylashsiz, qabul qilinmasa oddiy so'rov."""
+    url = f"{GEMINI}/models/{model}:generateContent?key={key}"
+    b2 = dict(body); gc = dict(b2.get("generationConfig", {})); gc["thinkingConfig"] = {"thinkingBudget": 0}; b2["generationConfig"] = gc
+    st, j = await post(http, url, json=b2)
+    if st == 400:
+        st, j = await post(http, url, json=body)
+    return st, j
+
+
 async def llm_gemini(http, msgs, temp):
     sys_txt, cont = gem_contents(msgs)
-    for k in rotated("gemini"):
-        try:
-            st, j = await post(http, f"{GEMINI}/models/{GEMINI_MODEL}:generateContent?key={k}",
-                               json={"systemInstruction": {"parts": [{"text": sys_txt}]}, "contents": cont,
-                                     "generationConfig": {"temperature": temp, "maxOutputTokens": 260}})
-        except (aiohttp.ClientError, asyncio.TimeoutError):
-            key_bad[k] = time.time()
-            continue
-        if st == 200:
+    body = {"systemInstruction": {"parts": [{"text": sys_txt}]}, "contents": cont, "generationConfig": {"temperature": temp, "maxOutputTokens": 500}}
+    for m in GEMINI_MODELS:
+        for k in rotated("gemini"):
             try:
-                return "".join(p.get("text", "") for p in j["candidates"][0]["content"]["parts"])
-            except (KeyError, IndexError):
+                st, j = await gem_call(http, m, k, body)
+            except (aiohttp.ClientError, asyncio.TimeoutError):
                 continue
-        if st in (400, 401, 403):
-            key_bad[k] = time.time()
+            if st == 200:
+                try:
+                    t = "".join(p.get("text", "") for p in j["candidates"][0]["content"]["parts"]).strip()
+                    if t:
+                        return t
+                except (KeyError, IndexError):
+                    pass
+                continue
+            if st in (401, 403):
+                key_bad[k] = time.time()
+            # 503/429/404: shu model band yoki yo'q, keyingi model/kalit
     raise Busy("gemini")
 
 
@@ -253,14 +268,15 @@ async def llm(msgs, temp=0.9):
 # ---------- STT: Groq Whisper -> Gemini ----------
 async def stt_gemini(http, raw, ctype):
     """Gemini audioni to'g'ridan-to'g'ri eshitadi: o'zbekcha va ruscha (aralash ham) Whisper'dan ancha aniq; xatolarni to'g'rilab yubormaydi."""
-    for k in rotated("gemini"):
+    for m in GEMINI_MODELS:
+      for k in rotated("gemini"):
         try:
-            st, j = await post(http, f"{GEMINI}/models/{GEMINI_MODEL}:generateContent?key={k}", json={"contents": [{"parts": [
+            st, j = await gem_call(http, m, k, {"contents": [{"parts": [
                 {"text": "Transcribe this audio VERBATIM, exactly as the person said it. The speaker may speak Uzbek (write in Latin script), Russian (write in Cyrillic), "
                          "or a mix of both, and may make grammar mistakes or mispronounce words: write what was said and do NOT correct, translate or improve it. "
                          "Output only the transcript, nothing else. If there is no speech, output nothing."},
                 {"inline_data": {"mime_type": (ctype or "audio/webm").split(";")[0], "data": base64.b64encode(raw).decode()}}]}],
-                "generationConfig": {"temperature": 0, "maxOutputTokens": 200}})
+                "generationConfig": {"temperature": 0, "maxOutputTokens": 300}})
         except (aiohttp.ClientError, asyncio.TimeoutError):
             continue
         if st == 200:
@@ -658,7 +674,7 @@ async def ai_turn(request):
                         "o'zbekcha yoki ruscha gapirishni talab qil.)" % heard[:60])
             ru, uz, fix, wrap, emo = await reply_for(info, ses, dinfo, said, left)
     except Busy:
-        return web.json_response({"error": "Rumiyo hozir band. Bir oz kutib, qayta urinib ko'ring. [sabab: " + (LAST_ERR[0] or "noma'lum") + "]"}, status=429)
+        return web.json_response({"error": "Rumiyo hozir band. Bir oz kutib, qayta urinib ko'ring. [sabab: " + ("; ".join("%s %s" % kv for kv in LAST_ERR.items()) or "noma'lum") + "]"}, status=429)
     except Exception as e:
         print("turn xato:", type(e).__name__, str(e)[:200])
         return web.json_response({"error": "Xatolik bo'ldi, vaqtingizdan hisoblanmadi. Qayta urinib ko'ring."}, status=500)
