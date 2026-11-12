@@ -34,6 +34,7 @@ STT_MODELS = ["whisper-large-v3-turbo", "whisper-large-v3"]
 LLM_MODELS = [x.strip() for x in os.getenv("GROQ_MODELS", "openai/gpt-oss-120b,openai/gpt-oss-20b,llama-3.3-70b-versatile,llama-3.1-8b-instant").split(",") if x.strip()]
 OR_MODEL = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+LLM_ORDER = [x.strip() for x in os.getenv("LLM_ORDER", "groq,openrouter,gemini").split(",") if x.strip()]   # masalan: gemini,groq,openrouter
 RU_VOICE = os.getenv("RU_VOICE", "ru-RU-DariyaNeural")   # boshqa: ru-RU-SvetlanaNeural, ru-RU-DmitryNeural
 if not SECRET:
     raise SystemExit("TALK_SECRET yo'q (botdagi bilan bir xil bo'lsin)")
@@ -240,7 +241,8 @@ async def llm_gemini(http, msgs, temp):
 async def llm(msgs, temp=0.9):
     last = None
     async with aiohttp.ClientSession() as http:
-        for fn in (llm_groq, llm_openrouter, llm_gemini):
+        fns = {"groq": llm_groq, "openrouter": llm_openrouter, "gemini": llm_gemini}
+        for fn in [fns[x] for x in LLM_ORDER if x in fns]:
             try:
                 return await fn(http, msgs, temp)
             except Busy as e:
@@ -320,12 +322,8 @@ async def tts(text, emo="normal", voice=None):
 
 async def tts_dual(uz, ru, emo="normal"):
     """O'zbekcha qism o'zbek ovozida, ruscha qism rus ovozida; ketma-ket ulanadi."""
-    out = b""
-    if uz:
-        out += await tts_safe(uz, emo, UZ_VOICE)
-    if ru:
-        out += await tts_safe(ru, emo, RU_VOICE)
-    return out
+    parts = await asyncio.gather(*([tts_safe(uz, emo, UZ_VOICE)] if uz else []), *([tts_safe(ru, emo, RU_VOICE)] if ru else []))
+    return b"".join(parts)
 
 
 async def tts_safe(text, emo="normal", voice=None):
@@ -436,6 +434,8 @@ Show anger the way an exasperated Uzbek ustoz would: scolding ("Ey, necha marta 
 Name-calling comes ONLY from the creator's scolding lines (below) plus mild ustoz grumbling; never invent your own swear words, slurs or threats of harm, and never attack religion, politics, ethnicity, looks, health or family. Your anger is about their mistakes, laziness and excuses.
 You must NEVER sound like a robot or a teacher reading a script. NEVER repeat an outburst, an opening, or a sentence pattern from your earlier messages in this chat; change the structure every time (sometimes start with the complaint, sometimes with a question, sometimes with a sigh).
 Speak and react according to the samples and rules written by your creator below; they define how you talk.
+
+LISTEN FIRST (very important): the learner's last message comes from speech recognition and may contain small errors, in Russian or Uzbek. Before anything else, react to what they ACTUALLY said: pick up their specific words or idea in the first sentence (quote a piece of it, answer their question, judge their exact sentence). If they asked you something, answer it first, then continue the lesson. If what they said answers your last question, judge it against that question. If it is truly unintelligible, say what you think you heard and ask. Never ignore their words and never reply with a generic scolding that could fit any message. Keep the thread of the whole conversation: refer to earlier things they said.
 
 TABIIY GAPIRISH (juda muhim; sening gaping ovozga aylantiriladi, shuning uchun jonli odamdek yoz):
 Sen robot emassan, jonli, asabiy o'zbek ustozsan. Gapingni xuddi og'zaki nutqdek yoz: qisqa-qisqa jumlalar, «eee», «voy», «hoy», «ha-ya», «xo'sh», «mana», «tushundingmi», «a?», «nima?!» kabi so'zlar, hayratlanish va ko'tarilgan ohang («Eee, sen nima deyapsan o'zi?!»), ko'p nuqta va undov, savol belgilari, ba'zan «hih» yoki «ha-ha» deb kulish (faqat haqiqatan kulganda). Ohang o'zgarib tursin: avval hayron, keyin jahl, keyin ma'yus ohang. Rasmiy va kitobiy so'z ishlatma ("quyidagi", "shuningdek", "mazkur", "xulosa qilib aytganda" yo'q). O'zbekcha so'zlashuv: «nima qilyapsan», «qara», «bo'ldi», «yo'q-e», «bor-ey», «jin urgurmi», «hay, hay!». Har gal gapni boshqacha boshla. Misollar (uslubni ushla, so'zma-so'z ko'chirma):
