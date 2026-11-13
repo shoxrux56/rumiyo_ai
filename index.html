@@ -84,6 +84,10 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
   "use strict";
   var $ = function (i) { return document.getElementById(i); };
   var token = new URLSearchParams(location.search).get("t") || "";
+  var EN = false;   // havola ichidagi til: ingliz bo'lsa true (token = base64(json).imzo)
+  try { var _b = token.split(".")[0].replace(/-/g, "+").replace(/_/g, "/"); EN = JSON.parse(decodeURIComponent(escape(atob(_b + "===".slice((_b.length + 3) % 4))))).g === "en"; } catch (e) {}
+  var FLAG = EN ? "🇬🇧 " : "🇷🇺 ", LNAME = EN ? "inglizcha" : "ruscha";
+  if (EN) { var _t = document.getElementById("h-topic"); if (_t) _t.textContent = "Bugungi darsni inglizcha gaplashib mustahkamlaymiz. Mikrofonga ruxsat bering."; }
   var botUrl = "https://t.me/rumiyo_bot";
   var mic = null, recorder = null, chunks = [], rec = false, busy = false, audio = null, tick = null, left = 0, ctx = null;
 
@@ -100,7 +104,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
   var playRes = null, speaking = false;
   function aiLog(j) {
     var d = document.createElement("div"); d.className = "m ai"; d.textContent = j.uz || j.ru || "";
-    if (j.uz && j.ru) { var b = document.createElement("b"); b.className = "ru"; b.textContent = "🇷🇺 " + j.ru; d.appendChild(b); }
+    if (j.uz && j.ru) { var b = document.createElement("b"); b.className = "ru"; b.textContent = FLAG + j.ru; d.appendChild(b); }
     $("log").appendChild(d); $("log").scrollTop = 1e9;
   }
   function play(b64, txt) {
@@ -206,7 +210,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
     $("c-topic").textContent = j.topic ? "Mavzu: " + j.topic : "";
     setLeft(j.left); aiLog(j); setAv(emoClip(j.emo));
     speaking = true; $("b-mic").disabled = false; state("Gapirish uchun tugmani bosing (Rumiyo to'xtaydi)");
-    return speak(j).then(function () { speaking = false; if (rec) return; setAv("idle"); $("b-mic").disabled = false; state("Tugmani bosib ruscha javob bering"); });
+    return speak(j).then(function () { speaking = false; if (rec) return; setAv("idle"); $("b-mic").disabled = false; state("Tugmani bosib " + LNAME + " javob bering"); });
   }
   function classicStart() {
     $("b-mic").classList.remove("rec"); $("b-mic").disabled = true; state("Rumiyo o'ylayapti…");
@@ -380,7 +384,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
         if (o.fix) log("fix", "✏️ " + o.fix);
         ensureBubble();
         if (!spoke) { bubble.textContent = o.uz || ""; startSpeaking(o.emo); chunkText(o.uz).forEach(function (t) { qAdd(t, "uz", o.emo); }); }
-        if (o.ru) { var b = document.createElement("b"); b.className = "ru"; b.textContent = "🇷🇺 " + o.ru; bubble.appendChild(b); qAdd(o.ru, "ru", o.emo); }
+        if (o.ru) { var b = document.createElement("b"); b.className = "ru"; b.textContent = FLAG + o.ru; bubble.appendChild(b); qAdd(o.ru, "ru", o.emo); }
         setLeft(o.left); setAv(emoClip(o.emo)); $("log").scrollTop = 1e9;
         var hold = Math.min(6000, 1200 + ((o.uz || "").length + (o.ru || "").length) * 60);
         qWhenDone(function () { if (myId !== spkId) return; if (qPlayed) speechEnded(o); else setTimeout(function () { if (myId === spkId) speechEnded(o); }, hold); });

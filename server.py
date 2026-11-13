@@ -37,6 +37,25 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 GEMINI_MODELS = list(dict.fromkeys([x.strip() for x in os.getenv("GEMINI_MODELS", GEMINI_MODEL + ",gemini-flash-lite-latest").split(",") if x.strip()]))   # biri band bo'lsa (503), keyingisi
 LLM_ORDER = [x.strip() for x in os.getenv("LLM_ORDER", "groq,openrouter,gemini").split(",") if x.strip()]   # masalan: gemini,groq,openrouter
 RU_VOICE = os.getenv("RU_VOICE", "ru-RU-DariyaNeural")   # boshqa: ru-RU-SvetlanaNeural, ru-RU-DmitryNeural
+EN_VOICE = os.getenv("EN_VOICE", "en-US-AriaNeural")     # ingliz qismi uchun; boshqa: en-US-JennyNeural, en-GB-SoniaNeural
+TRENER_DATA_EN = os.getenv("TRENER_DATA_EN", "https://shoxrux56.github.io/trening_ingilish/data.js")
+
+
+def lg(info):
+    """Havoladagi til: 'en' (ingliz) yoki 'ru' (eski havolalarda ham rus)."""
+    return "en" if (info or {}).get("g") == "en" else "ru"
+
+
+def to_en(p):
+    """Ruscha ustoz ko'rsatmasini ingliz tiliga o'giradi: maqsadli til = ingliz. O'zbekcha qismlar va ko'cha ruscha so'zlari (patsan, davay...) o'zgarmaydi."""
+    p = p.replace("short Russian slang words", "§SLANG§")
+    p = p.replace("Russian in Cyrillic", "English in Latin letters").replace("Russian", "English")
+    p = p.replace("ruscha", "inglizcha").replace("«\"Ya hochu pit\"?!", "«\"I am go home\"?!")
+    return p.replace("§SLANG§", "short Russian slang words")
+
+
+EN_ADDENDUM = """
+ENGLISH MODE: this learner is an Uzbek speaker learning ENGLISH. The `RU:` line (the label is only a technical name) carries the short ENGLISH word or sentence to learn or repeat; the live voice says it aloud in English. You still talk in Uzbek with Tashkent street slang as described. When you give a new English phrase, or the learner mispronounced something, add a quick pronunciation hint in Uzbek letters inside the UZ line, e.g. «water» deb ayt: «uoter». In FIX explain English mistakes in Uzbek. Typical Uzbek-speaker traps: a/an/the, he/she/it + s, is/are, word order, th and w sounds. The learner's sentences listed above are English = Uzbek. Never answer with a Russian lesson."""
 if not SECRET:
     raise SystemExit("TALK_SECRET yo'q (botdagi bilan bir xil bo'lsin)")
 
@@ -266,13 +285,13 @@ async def llm(msgs, temp=0.9):
 
 
 # ---------- STT: Groq Whisper -> Gemini ----------
-async def stt_gemini(http, raw, ctype):
+async def stt_gemini(http, raw, ctype, lang="ru"):
     """Gemini audioni to'g'ridan-to'g'ri eshitadi: o'zbekcha va ruscha (aralash ham) Whisper'dan ancha aniq; xatolarni to'g'rilab yubormaydi."""
     for m in GEMINI_MODELS:
       for k in rotated("gemini"):
         try:
             st, j = await gem_call(http, m, k, {"contents": [{"parts": [
-                {"text": "Transcribe this audio VERBATIM, exactly as the person said it. The speaker may speak Uzbek (write in Latin script), Russian (write in Cyrillic), "
+                {"text": ("ENGLISH LESSON MODE: the speaker is a beginner learning English; they speak English or Uzbek (both in Latin script) and may use a few Russian street words. " if lang == "en" else "") + "Transcribe this audio VERBATIM, exactly as the person said it. The speaker may speak Uzbek (write in Latin script), Russian (write in Cyrillic), "
                          "or a mix of both, and may make grammar mistakes or mispronounce words: write what was said and do NOT correct, translate or improve it. "
                          "Output only the transcript, nothing else. If there is no speech, output nothing."},
                 {"inline_data": {"mime_type": (ctype or "audio/webm").split(";")[0], "data": base64.b64encode(raw).decode()}}]}],
@@ -289,14 +308,17 @@ async def stt_gemini(http, raw, ctype):
     return ""
 
 
-async def stt(raw, ctype):
+async def stt(raw, ctype, lang="ru"):
+    lang_t = lang
     ext = "webm" if "webm" in ctype else "m4a" if ("mp4" in ctype or "aac" in ctype) else "ogg" if "ogg" in ctype else "wav" if "wav" in ctype else "webm"
     async with aiohttp.ClientSession() as http:
         TURKIC = {"turkish", "kazakh", "azerbaijani", "tatar", "kyrgyz", "turkmen", "bashkir", "uzbek", "tajik"}
         if keys("gemini"):
-            t = await stt_gemini(http, raw, ctype)
+            t = await stt_gemini(http, raw, ctype, lang_t)
             if t:
                 return t, False
+
+        lang_t = lang
 
         async def call(k, m, lang):
             form = aiohttp.FormData()
@@ -306,7 +328,8 @@ async def stt(raw, ctype):
             form.add_field("response_format", "verbose_json")
             if lang:
                 form.add_field("language", lang)
-            form.add_field("prompt", "Привет! Я хочу пить. Salom, men suv ichmoqchiman. Qancha turadi?")
+            form.add_field("prompt", "Hello! I want some water, please. Salom, men suv ichmoqchiman. Qancha turadi?" if lang_t == "en"
+                           else "Привет! Я хочу пить. Salom, men suv ichmoqchiman. Qancha turadi?")
             return await post(http, GROQ + "/audio/transcriptions", {"Authorization": "Bearer " + k}, data=form)
 
         for k in rotated("groq"):
@@ -317,14 +340,15 @@ async def stt(raw, ctype):
                         lang = (j.get("language") or "").lower()
                         text = (j.get("text") or "").strip()
                         foreign = False
-                        if lang not in ("russian", "uzbek") and text:   # noto'g'ri til (masalan, islandcha): qayta, to'g'ri tilda
-                            st2, j2 = await call(k, m, "uz" if lang in TURKIC else "ru")
+                        okl = ("english", "uzbek", "russian") if lang_t == "en" else ("russian", "uzbek")
+                        if lang not in okl and text:   # noto'g'ri til (masalan, islandcha): qayta, to'g'ri tilda
+                            st2, j2 = await call(k, m, "uz" if lang in TURKIC else ("en" if lang_t == "en" else "ru"))
                             if st2 == 200 and (j2.get("text") or "").strip():
                                 text = j2["text"].strip()
                             letters = [c for c in text if c.isalpha()]
                             cyr = sum(1 for c in letters if "\u0400" <= c <= "\u04ff")
                             lat_uz = lang in TURKIC
-                            foreign = bool(letters) and not lat_uz and cyr / len(letters) < 0.5   # na ruscha, na o'zbekcha
+                            foreign = bool(letters) and not lat_uz and (cyr / len(letters) < 0.5 if lang_t != "en" else False)   # na ruscha, na o'zbekcha
                         return text, foreign
                 except (aiohttp.ClientError, asyncio.TimeoutError):
                     key_bad[k] = time.time()
@@ -334,7 +358,7 @@ async def stt(raw, ctype):
                 if st in (401, 402, 403) or st >= 500:
                     key_bad[k] = time.time()
                     break
-        t = await stt_gemini(http, raw, ctype)
+        t = await stt_gemini(http, raw, ctype, lang_t)
         if t:
             return t, False
     raise Busy("stt")
@@ -363,9 +387,9 @@ async def tts(text, emo="normal", voice=None):
     return out
 
 
-async def tts_dual(uz, ru, emo="normal"):
-    """O'zbekcha qism o'zbek ovozida, ruscha qism rus ovozida; ketma-ket ulanadi."""
-    parts = await asyncio.gather(*([tts_safe(uz, emo, UZ_VOICE)] if uz else []), *([tts_safe(ru, emo, RU_VOICE)] if ru else []))
+async def tts_dual(uz, ru, emo="normal", lang="ru"):
+    """O'zbekcha qism o'zbek ovozida, ruscha (yoki inglizcha) qism o'z ovozida; ketma-ket ulanadi."""
+    parts = await asyncio.gather(*([tts_safe(uz, emo, UZ_VOICE)] if uz else []), *([tts_safe(ru, emo, EN_VOICE if lang == "en" else RU_VOICE)] if ru else []))
     return b"".join(parts)
 
 
@@ -379,25 +403,26 @@ async def tts_safe(text, emo="normal", voice=None):
 
 
 # ---------- bugungi dars (trener data.js) ----------
-_days = {"ts": 0, "map": {}}
+_days = {"ru": {"ts": 0, "map": {}}, "en": {"ts": 0, "map": {}}}
 
 
-async def day_info(d):
-    """Trenerdagi d-kun: {"t": mavzu, "i": [[id, ru, uz, emoji], ...]} yoki None."""
+async def day_info(d, lang="ru"):
+    """Trenerdagi d-kun: {"t": mavzu, "i": [[id, ru|en, uz, emoji], ...]} yoki None. lang: rus yoki ingliz Trener."""
     if not d:
         return None
-    if time.time() - _days["ts"] > 3600 or not _days["map"]:
+    dd = _days["en" if lang == "en" else "ru"]
+    if time.time() - dd["ts"] > 3600 or not dd["map"]:
         try:
             async with aiohttp.ClientSession() as http:
-                async with http.get(TRENER_DATA, timeout=aiohttp.ClientTimeout(total=20)) as r:
+                async with http.get(TRENER_DATA_EN if lang == "en" else TRENER_DATA, timeout=aiohttp.ClientTimeout(total=20)) as r:
                     s = await r.text()
             arr = json.loads(s[s.index("["): s.rindex("]") + 1])
-            _days["map"] = {int(x["d"]): x for x in arr}
-            _days["ts"] = time.time()
+            dd["map"] = {int(x["d"]): x for x in arr}
+            dd["ts"] = time.time()
         except Exception as e:
             print("data.js:", type(e).__name__)
-            _days["ts"] = time.time() - 3300     # 5 daqiqadan keyin qayta urinadi
-    return _days["map"].get(int(d))
+            dd["ts"] = time.time() - 3300     # 5 daqiqadan keyin qayta urinadi
+    return dd["map"].get(int(d))
 
 
 # ---------- sessiya (suhbat xotirasi) ----------
@@ -540,6 +565,8 @@ RU: <ONLY the short Russian word/sentence to learn or repeat (max ~12 words), or
 FIX: <in Uzbek: if the learner's last Russian had a mistake, write "wrong -> correct" plus a very short reason; otherwise just a dash ->
 EMO: <one word: angry (you are furious/scolding), cry (you are crying dramatically, e.g. the learner keeps failing or you threaten to quit), happy (you laughed or are pleased), or normal>
 Also add one more line `Q: <Uzbek sentence> | <Russian sentence>` ONLY if you asked a quiz question in this reply."""
+    if lg(info) == "en":
+        p = to_en(p) + EN_ADDENDUM
     return p, nxt
 
 
@@ -741,6 +768,8 @@ async def reply_stream(info, ses, dinfo, user_text, left, emit, audio=None):
                    "Your reply MUST start with one extra first line: `HEARD: <what they said, VERBATIM, Uzbek in Latin letters, Russian in Cyrillic; do not correct their mistakes>`, "
                    "then the usual lines (UZ, RU, FIX, EMO, Q). If they speak neither Uzbek nor Russian, write HEARD: (tushunarsiz til) and scold them in Uzbek for forgetting their own language and demand Uzbek or Russian. "
                    "If you hear nothing intelligible, write HEARD: (eshitilmadi) and snap at them to speak up.")
+        if lg(info) == "en":
+            sysmsg = to_en(sysmsg)
         hist = list(ses["hist"])
     else:
         hist = ses["hist"] + [{"role": "user", "content": user_text}]
@@ -872,7 +901,7 @@ async def ai_live(request):
     if not (LIVE_ON and keys("gemini")):
         await j({"t": "nolive"}); await ws.close(); return ws
     ses = get_session(info)
-    dinfo = await day_info(info.get("d"))
+    dinfo = await day_info(info.get("d"), lg(info))
     humor = humor_level()
     ex = G.sample({0: 2, 1: 3, 2: 4, 3: 5}[humor], humor)
     sysmsg, _nxt = build_system(info, ses, dinfo, ex, left0, False, live=True)
@@ -998,7 +1027,7 @@ async def ai_start(request):
         return web.json_response({"error": "Havola eskirgan. Botdan qayta oching."}, status=403)
     uid = int(info["u"])
     left = left_for(uid)
-    dinfo = await day_info(info.get("d"))
+    dinfo = await day_info(info.get("d"), lg(info))
     topic = (dinfo or {}).get("t") or info.get("t") or ""
     if left <= 0:
         return web.json_response({"done": True, "left": 0, "ru": "", "cta": cta_text(), "bot": BOT_URL, "topic": topic})
@@ -1020,7 +1049,8 @@ async def ai_start(request):
             audio = b""
     except Exception as e:
         print("start:", type(e).__name__, str(e)[:160])
-        ru, uz, audio, emo = "Привет! Я Румиё. Давай поболтаем про сегодняшний урок!", "Salom! Men Rumiyoman. Keling, bugungi dars haqida gaplashamiz!", b"", "normal"
+        ru, uz, audio, emo = (("Hello! I'm Rumiyo. Let's talk about today's lesson!" if lg(info) == "en" else "Привет! Я Румиё. Давай поболтаем про сегодняшний урок!"),
+                              "Salom! Men Rumiyoman. Keling, bugungi dars haqida gaplashamiz!", b"", "normal")
         ses["hist"].append({"role": "assistant", "content": f"UZ: {uz}\nRU: {ru}"})
     return web.json_response({"ru": ru, "uz": uz, "emo": emo, "audio": base64.b64encode(audio).decode(), "left": left,
                               "topic": topic, "returning": again, "bot": BOT_URL})
@@ -1032,12 +1062,13 @@ async def ai_tts(request):
         j = await request.json()
     except Exception:
         return web.json_response({"audio": ""})
-    if not verify(j.get("token")):
+    tinfo = verify(j.get("token"))
+    if not tinfo:
         return web.json_response({"error": "Havola eskirgan."}, status=403)
     text = (j.get("text") or "")[:400].strip()
     if not text:
         return web.json_response({"audio": ""})
-    voice = RU_VOICE if j.get("lang") == "ru" else UZ_VOICE
+    voice = (EN_VOICE if lg(tinfo) == "en" else RU_VOICE) if j.get("lang") == "ru" else UZ_VOICE
     emo = j.get("emo") if j.get("emo") in PROSODY else "normal"
     a = await tts_safe(text, emo, voice)
     return web.json_response({"audio": base64.b64encode(a).decode()})
@@ -1060,7 +1091,7 @@ async def ai_turn(request):
         dur = 5
     ctype = request.headers.get("Content-Type", "")
     ses = get_session(info)
-    dinfo = await day_info(info.get("d"))
+    dinfo = await day_info(info.get("d"), lg(info))
     t0 = time.time()
     resp = web.StreamResponse(headers={"Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
     await resp.prepare(request)
@@ -1088,7 +1119,7 @@ async def ai_turn(request):
                     res = None
             if res is None:
                 mode = "eshitish + AI"
-                heard, foreign = await stt(raw, ctype)
+                heard, foreign = await stt(raw, ctype, lg(info))
                 if not heard:
                     await emit({"t": "error", "error": "Ovozni eshita olmadim. Aniqroq gapiring."})
                     await resp.write_eof()
@@ -1096,8 +1127,8 @@ async def ai_turn(request):
                 await emit({"t": "heard", "heard": heard})
                 said = heard
                 if foreign:
-                    said = ("(o'quvchining nutqi na o'zbekcha, na ruscha eshitildi; eshitilgani: «%s». Jahl bilan «o'z tilingni unutdingmi?» deb koy va "
-                            "o'zbekcha yoki ruscha gapirishni talab qil.)" % heard[:60])
+                    said = ("(o'quvchining nutqi na o'zbekcha, na %s eshitildi; eshitilgani: «%s». Jahl bilan «o'z tilingni unutdingmi?» deb koy va "
+                            "o'zbekcha yoki %s gapirishni talab qil.)" % (("inglizcha", heard[:60], "inglizcha") if lg(info) == "en" else ("ruscha", heard[:60], "ruscha")))
                 res = await reply_stream(info, ses, dinfo, said, left, emit_t)
     except Busy:
         await emit({"t": "error", "error": busy_msg % ("; ".join("%s %s" % kv for kv in LAST_ERR.items()) or "noma'lum")})
