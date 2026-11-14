@@ -10,7 +10,7 @@
 :root[data-theme="dark"]{--bg:#1b1410;--bg2:#271b14;--surf:#2a1e17;--line:#4a3527;--tx:#f8ebdd;--mut:#b99a80;--acc:#ff8a3d;--acc2:#ffc233;--me:#4a3220;--ok:#69db7c}
 *{box-sizing:border-box}
 html,body{height:100%}
-body{margin:0;background:radial-gradient(120% 70% at 50% -10%,var(--bg2),var(--bg) 60%) fixed;color:var(--tx);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+body{margin:0;background:radial-gradient(120% 70% at 50% -10%,var(--bg2),var(--bg) 60%);color:var(--tx);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:max(12px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-bottom,0px))}
 .scr{max-width:560px;margin:0 auto;height:calc(100vh - 24px);height:calc(100dvh - 24px);display:flex;flex-direction:column;gap:12px}
 .hide{display:none!important}
@@ -61,6 +61,8 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 .ac img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;display:block}
 .ac b{font-size:.82rem}
 .ac[aria-pressed=true]{border-color:var(--acc);box-shadow:0 0 0 3px rgba(232,89,12,.18);transform:translateY(-2px)}
+.av{contain:paint}
+.vrm-eng:not(.vrm-ready)::after{content:"Ustoz yuklanmoqda…";position:absolute;left:0;right:0;top:46%;text-align:center;color:#fff;font-weight:700;text-shadow:0 1px 6px rgba(0,0,0,.45)}
 .av.body{width:auto;height:min(44vh,380px);aspect-ratio:3/4;border-radius:22px}
 .cap{position:relative;margin-top:10px;background:rgba(255,255,255,.93);color:#2a1a10;border:2px solid var(--capc,#e8590c);border-radius:20px;padding:16px 16px 12px;box-shadow:0 8px 28px rgba(0,0,0,.28);font-weight:600}
 #cap-t{max-height:28vh;overflow:auto}
@@ -68,7 +70,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 .cap .m{background:none;border:0;padding:0;max-width:100%;align-self:auto;color:#2a1a10}
 .cap .m small{color:#6b5444;font-weight:500}
 .cap .m .ru{color:#d9480f}
-.capme{align-self:flex-end;max-width:85%;background:rgba(0,0,0,.45);color:#fff;border-radius:99px;padding:4px 14px;font-size:.85rem;backdrop-filter:blur(4px)}
+.capme{align-self:flex-end;max-width:85%;background:rgba(0,0,0,.45);color:#fff;border-radius:99px;padding:4px 14px;font-size:.85rem}
 body.stage{background:#111}
 body.stage .av{position:fixed!important;inset:0;width:auto;height:auto;aspect-ratio:auto;margin:0;border-radius:0;box-shadow:none;z-index:0}
 body.stage .av.av-pop{animation:none}
@@ -117,6 +119,7 @@ body.stage .dock .link{color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.6)}
     </div>
     <button type="button" id="b-chg" class="link chg" hidden>Ustozni o'zgartirish</button>
     <p id="lockmsg" class="note" hidden></p>
+    <button type="button" id="b-3d" class="link note" hidden>3D avatarni qayta yoqish (yengil rejim yoniq)</button>
     <p id="pickhint" class="note" hidden style="color:var(--acc)">Avval jinsingiz, ustoz ko'rinishi va xarakterni tanlang</p>
     <p class="lead" id="h-topic">Bugungi darsni ruscha gaplashib mustahkamlaymiz. Mikrofonga ruxsat bering.</p>
     <button id="b-go" class="orb big" aria-label="Boshlash"><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
@@ -125,7 +128,7 @@ body.stage .dock .link{color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.6)}
 </section>
 
 <section id="s-chat" class="scr hide">
-  <div class="bar"><div><h2 id="c-name">Rumiyo</h2><div class="topic" id="c-topic"></div></div><span style="display:flex;gap:8px;align-items:center"><button id="b-hist" class="link" type="button" style="padding:2px 4px;font-size:.9rem" hidden>📜</button><button id="b-view" class="link" type="button" style="padding:2px 4px;font-size:.82rem"></button><span class="chip">Qoldi <b id="left">--:--</b></span></span></div>
+  <div class="bar"><div><h2 id="c-name">Rumiyo</h2><div class="topic" id="c-topic"></div></div><span style="display:flex;gap:8px;align-items:center"><button id="b-lite" class="link" type="button" style="padding:2px 4px;font-size:.9rem" title="Yengil rejim (2D avatar)">⚡</button><button id="b-hist" class="link" type="button" style="padding:2px 4px;font-size:.9rem" hidden>📜</button><button id="b-view" class="link" type="button" style="padding:2px 4px;font-size:.82rem"></button><span class="chip">Qoldi <b id="left">--:--</b></span></span></div>
   <div class="av" id="av"></div>
   <div id="cap" class="cap" hidden><span class="tag" id="cap-tag"></span><div id="cap-t"></div></div>
   <div id="capme" class="capme" hidden></div>
@@ -147,7 +150,7 @@ body.stage .dock .link{color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.6)}
 </section>
 
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="vrm/rumiyo-vrm.js"></script>
+<script src="vrm/rumiyo-vrm.js?v=5"></script>
 <script>
 /* Rumiyo avatari: jahldor ustoz (2D, SVG). Ko'z pirpiraydi, ko'zlar sichqoncha/barmoqni kuzatadi,
    og'iz ovoz balandligiga qarab ochiladi, jahl/kulgi/yig'i/xursandlik holatlari silliq o'tadi. */
@@ -470,7 +473,7 @@ var RumiyoAvatar = (function () {
 
   // ---- avatar: 2D SVG ustoz; hissiyatga qarab yuzi o'zgaradi, og'zi ovozga mos ochiladi ----
   // 3D VRM avatar (WebGL); qurilmada WebGL yoki model yuklanmasa, 2D SVG avatarga o'tadi
-  var AV = { m1: { vrm: "vrm/ustoz-m1.vrm", s: "m" }, f1: { vrm: "vrm/ustoz-f1.vrm", s: "f" }, f2: { vrm: "vrm/ustoz-f2.vrm", s: "f" } };
+  var AV = { m1: { vrm: "vrm/ustoz-m1.vrm?v=3", s: "m" }, f1: { vrm: "vrm/ustoz-f1.vrm?v=3", s: "f" }, f2: { vrm: "vrm/ustoz-f2.vrm?v=3", s: "f" } };
   var CH = { friendly: { n: "Do'stona", cls: "fr" }, angry: { n: "Jahldor", cls: "" }, fiery: { n: "Ehtirosli", cls: "fi" }, sweet: { n: "Shirin so'z", cls: "sw" } };
   var P = { a: "m1", c: "friendly" }, chosen = false, gender = "", lockLeft = 0, picking = false;
   try { var sp = JSON.parse(localStorage.getItem("rumiyo_pick") || "null"); if (sp && AV[sp.a] && CH[sp.c]) { P = { a: sp.a, c: sp.c }; chosen = true; } } catch (e) {}
@@ -478,26 +481,32 @@ var RumiyoAvatar = (function () {
   var persona = P.a + "." + P.c;     // serverga "avatar.xarakter" ko'rinishida ketadi
   function soft() { return P.c !== "angry"; }
   function tname() { return CH[P.c].n + (AV[P.a].s === "f" ? " ustoza" : " ustoz"); }
+  var LITE = false;
+  try { LITE = localStorage.getItem("rumiyo_lite") === "1"; } catch (e) {}
   function makeAv(host) {
-    var cur = null, curUrl = "", st = { emo: "idle", talking: false, ana: null };
+    var cur = null, curUrl = "", mt = 0, st = { emo: "idle", talking: false, ana: null };
     function webgl() { try { var c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); } catch (e) { return false; } }
     function useSvg() {
       try { if (cur && cur.destroy) cur.destroy(); } catch (e) {}
-      host.innerHTML = ""; cur = RumiyoAvatar.create(host);
+      host.classList.remove("vrm-eng", "vrm-ready"); host.innerHTML = ""; cur = RumiyoAvatar.create(host);
       cur.set(st.emo); cur.talking(st.talking); cur.analyser(st.ana);
     }
     try {
-      if (!window.RumiyoVRM || !webgl()) throw 0;
-      curUrl = AV[P.a].vrm; cur = RumiyoVRM.create(host, { url: curUrl }); cur.onFail(useSvg);
+      if (LITE || !window.RumiyoVRM || !webgl()) throw 0;
+      curUrl = AV[P.a].vrm; cur = RumiyoVRM.create(host, { url: curUrl }); host.classList.add("vrm-eng");
+      cur.onFail(function (why) { if (why === "slow") { LITE = true; try { localStorage.setItem("rumiyo_lite", "1"); } catch (e) {} } useSvg(); $("b-lite").hidden = true; $("b-3d").hidden = false; });
       if (cur.friendly) cur.friendly(soft());
     } catch (e) { useSvg(); }
-    return {
+    var api = {
       set: function (n) { st.emo = n; cur.set(n); }, talking: function (v) { st.talking = !!v; cur.talking(v); },
       analyser: function (a) { st.ana = a || null; cur.analyser(a); }, enter: function () { cur.enter(); },
       react: function (n) { if (cur.react) cur.react(n); },
       view: function (v) { if (cur.setView) { cur.setView(v); return true; } return false; },
-      model: function (u, fr) { if (cur.setModel) { cur.friendly(fr); if (u !== curUrl) { curUrl = u; cur.setModel(u); } } }
+      model: function (u, fr) { if (cur.setModel) { cur.friendly(fr); if (u !== curUrl) { curUrl = u; clearTimeout(mt); mt = setTimeout(function () { try { cur.setModel(u); } catch (e) {} }, 180); } } },
+      lite: function () { useSvg(); }
     };
+    Object.keys(api).forEach(function (k) { var f = api[k]; api[k] = function () { try { return f.apply(this, arguments); } catch (e) { return false; } }; });
+    return api;
   }
   var avCur = "", avC = makeAv($("av")), avH = avC;
   avH.set("happy"); setTimeout(function () { avH.set("idle"); }, 1800);
@@ -563,6 +572,9 @@ var RumiyoAvatar = (function () {
     syncCap();
   }
   $("b-view").onclick = function () { viewMode = viewMode === "stage" ? "card" : "stage"; try { localStorage.setItem("rumiyo_view2", viewMode); } catch (e) {} applyView("s-chat"); };
+  $("b-lite").onclick = function () { LITE = true; try { localStorage.setItem("rumiyo_lite", "1"); } catch (e) {} avC.lite(); $("b-lite").hidden = true; $("b-3d").hidden = false; applyView("s-chat"); };
+  $("b-3d").onclick = function () { try { localStorage.removeItem("rumiyo_lite"); } catch (e) {} location.reload(); };
+  if (LITE) { $("b-lite").hidden = true; $("b-3d").hidden = false; }
   $("b-hist").onclick = function () { $("log").classList.toggle("hist"); $("log").scrollTop = 1e9; };
   // dialog oynasi: ustozning oxirgi gapi tepada, o'quvchining gapi pastda
   function syncCap() {

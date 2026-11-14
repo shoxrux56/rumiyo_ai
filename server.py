@@ -1584,6 +1584,14 @@ def add_routes(app, prefix=""):
     app.router.add_post(p + "/ai/turn", ai_turn)
     app.router.add_post(p + "/ai/end", ai_end)
     app.router.add_get(p + "/ai/me", ai_me)
+    @web.middleware
+    async def _cache_mw(request, handler):
+        resp = await handler(request)
+        pth = request.path
+        if ("/vrm/" in pth or "/media/" in pth) and resp.status == 200 and "Cache-Control" not in resp.headers:
+            resp.headers["Cache-Control"] = "public, max-age=604800, immutable" if request.query_string else "public, max-age=3600"
+        return resp
+    app.middlewares.append(_cache_mw)
     app.router.add_post(p + "/ai/tts", ai_tts)
     app.router.add_post(p + "/admin/add", admin_add)
     app.router.add_post(p + "/admin/sync", admin_sync)
