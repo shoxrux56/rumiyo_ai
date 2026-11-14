@@ -25,3 +25,9 @@ LIVE_PTT=1 (standart): mikrofon faqat tugma bosilganda ochiladi. Tez bosish = yo
 LIVE_PTT=0: eski doimiy eshitish rejimi.
 Kunlik limit faqat gapirilgan vaqtni sanaydi (odam + Rumiyo ovozi); jimlik hisobga kirmaydi.
 LIVE_IDLE=150: shuncha soniya jim bo'lsa qo'ng'iroq yopiladi. Limit: DAILY_MIN (standart 5 daqiqa).
+
+--- Avatar ---
+Avatar endi videolar emas, 2D SVG ustoz (index.html ichida): ko'z pirpiraydi, ko'zlar barmoq/sichqonchani kuzatadi,
+og'iz Rumiyo ovozi balandligiga qarab ochiladi, holatlar: idle, speak, angry (qizarish, bug', jahl belgisi), laugh, cry, happy.
+Jonli rejimda hissiyat Rumiyo aytgan matndan aniqlanadi (moodFrom funksiyasi). Avatarni bossangiz jahli chiqadi.
+media/*.mp4 endi ishlatilmaydi (o'chirsa bo'ladi).

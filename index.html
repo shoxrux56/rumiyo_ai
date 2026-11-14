@@ -39,8 +39,10 @@ h2{font-size:1.15rem}
 .btn{display:inline-block;border:0;border-radius:14px;padding:13px 22px;font:inherit;font-weight:600;background:var(--acc);color:#fff;text-decoration:none;cursor:pointer}
 .link{background:none;border:0;color:var(--mut);font:inherit;text-decoration:underline;cursor:pointer;padding:6px}
 .emoji{font-size:3rem}
-.av{width:min(46vw,210px);aspect-ratio:1;margin:0 auto;border-radius:26px;overflow:hidden;background:#2a0d12;flex:none;box-shadow:0 6px 24px rgba(0,0,0,.25);transition:box-shadow .3s}
-.av video{width:100%;height:100%;object-fit:cover;display:block}
+.av{width:min(64vw,280px);aspect-ratio:1;margin:0 auto;border-radius:26px;overflow:hidden;background:#2a0d12;flex:none;box-shadow:0 6px 24px rgba(0,0,0,.25);transition:box-shadow .3s}
+.av svg{width:100%;height:100%;display:block}
+@keyframes avpop{0%{transform:scale(.3) rotate(-14deg);opacity:0}55%{transform:scale(1.14) rotate(5deg);opacity:1}75%{transform:scale(.96) rotate(-2deg)}100%{transform:scale(1) rotate(0)}}
+.av-pop{animation:avpop .85s cubic-bezier(.2,.9,.3,1.2) both}
 body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 </style>
 </head>
@@ -50,7 +52,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 
 <section id="s-hello" class="scr hide">
   <div class="mid">
-    <div class="av" id="av-h"><video muted playsinline loop autoplay preload="auto" src="media/idle.mp4" onerror="document.getElementById('av-h').hidden=true"></video></div>
+    <div class="av" id="av-h"></div>
     <h1>Rumiyo bilan gaplashamiz</h1>
     <p class="lead" id="h-topic">Bugungi darsni ruscha gaplashib mustahkamlaymiz. Mikrofonga ruxsat bering.</p>
     <button id="b-go" class="orb big" aria-label="Boshlash"><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
@@ -60,7 +62,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 
 <section id="s-chat" class="scr hide">
   <div class="bar"><div><h2>Rumiyo</h2><div class="topic" id="c-topic"></div></div><span class="chip">Qoldi <b id="left">--:--</b></span></div>
-  <div class="av" id="av"><video id="av-v" muted playsinline loop preload="auto"></video></div>
+  <div class="av" id="av"></div>
   <div id="log" class="log"></div>
   <div class="dock">
     <button id="b-mic" class="orb" aria-label="Gapirish"><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
@@ -80,6 +82,218 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
+/* Rumiyo avatari: jahldor ustoz (2D, SVG). Ko'z pirpiraydi, ko'zlar sichqoncha/barmoqni kuzatadi,
+   og'iz ovoz balandligiga qarab ochiladi, jahl/kulgi/yig'i/xursandlik holatlari silliq o'tadi. */
+var RumiyoAvatar = (function () {
+  var uid = 0;
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+  function mix(c1, c2, t) {
+    var r = [], i;
+    for (i = 0; i < 3; i++) r.push(Math.round(lerp(parseInt(c1.substr(1 + i * 2, 2), 16), parseInt(c2.substr(1 + i * 2, 2), 16), clamp(t, 0, 1))));
+    return "rgb(" + r.join(",") + ")";
+  }
+  var E = {   // holatlar: maqsad qiymatlari
+    idle:  { brow: 0,    browY: 0,  smile: 0.18, eye: 1,    flush: 0,    steam: 0, shake: 0, tears: 0, laugh: 0, happy: 0, bob: 0.15 },
+    speak: { brow: -0.3, browY: 1,  smile: -0.1, eye: 0.95, flush: 0.18, steam: 0, shake: 0.1, tears: 0, laugh: 0, happy: 0, bob: 0.3 },
+    angry: { brow: -1,   browY: 3,  smile: -0.85, eye: 0.7, flush: 1,    steam: 1, shake: 1, tears: 0, laugh: 0, happy: 0, bob: 0.2 },
+    laugh: { brow: 0.45, browY: -5, smile: 1,    eye: 1,    flush: 0.3,  steam: 0, shake: 0, tears: 0.35, laugh: 1, happy: 0, bob: 1 },
+    cry:   { brow: 1,    browY: -2, smile: -0.7, eye: 0.82, flush: 0.12, steam: 0, shake: 0.15, tears: 1, laugh: 0, happy: 0, bob: 0.2 },
+    happy: { brow: 0.5,  browY: -6, smile: 1,    eye: 1.08, flush: 0.1,  steam: 0, shake: 0, tears: 0, laugh: 0, happy: 1, bob: 0.6 }
+  };
+
+  function build(host) {
+    var id = "ra" + (++uid);
+    host.innerHTML =
+      '<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Rumiyo">' +
+      '<defs><clipPath id="' + id + 'm"><path id="' + id + 'mc" d=""/></clipPath>' +
+      '<radialGradient id="' + id + 'g" cx="50%" cy="38%" r="75%"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>' +
+      '<rect id="' + id + 'bg" width="300" height="300" fill="#ffcf99"/><rect width="300" height="300" fill="url(#' + id + 'g)"/>' +
+      '<g id="' + id + 'rays" opacity="0" stroke="#ffe27a" stroke-width="5" stroke-linecap="round"></g>' +
+      '<g id="' + id + 'body"><path d="M40 300 Q46 238 112 226 L188 226 Q254 238 260 300 Z" fill="#2f6f5e"/>' +
+      '<path d="M112 226 L150 262 L188 226 Z" fill="#f3c7a1"/>' +
+      '<path d="M96 300 L108 236 M126 300 L130 250 M174 300 L170 250 M204 300 L192 236" stroke="#f2c14e" stroke-width="5" opacity=".85"/></g>' +
+      '<g id="' + id + 'hd">' +
+        '<g id="' + id + 'steamL"></g><g id="' + id + 'steamR"></g>' +
+        '<circle cx="60" cy="168" r="21" fill="#e9b088"/><circle cx="60" cy="168" r="10" fill="#d99a72"/>' +
+        '<circle cx="240" cy="168" r="21" fill="#e9b088"/><circle cx="240" cy="168" r="10" fill="#d99a72"/>' +
+        '<ellipse cx="150" cy="170" rx="92" ry="98" fill="#f3c7a1" stroke="#c98d63" stroke-width="3"/>' +
+        '<ellipse id="' + id + 'fl" cx="150" cy="170" rx="92" ry="98" fill="#ff3b30" opacity="0"/>' +
+        '<ellipse cx="86" cy="196" rx="20" ry="13" fill="#ff7a7a" opacity=".28"/><ellipse cx="214" cy="196" rx="20" ry="13" fill="#ff7a7a" opacity=".28"/>' +
+        '<g id="' + id + 'dp"><path d="M62 116 Q60 66 104 54 L196 54 Q240 66 238 116 Q150 140 62 116 Z" fill="#1c1c34"/>' +
+          '<path d="M62 116 Q150 140 238 116 L236 102 Q150 124 64 102 Z" fill="#2c2c52"/>' +
+          '<g fill="none" stroke="#f6f0dc" stroke-width="3" stroke-linejoin="round"><path d="M96 92 L112 76 L128 92 L112 108 Z"/><path d="M136 92 L152 76 L168 92 L152 108 Z"/><path d="M176 92 L192 76 L208 92 L192 108 Z"/></g>' +
+          '<circle cx="112" cy="92" r="3" fill="#f2c14e"/><circle cx="152" cy="92" r="3" fill="#f2c14e"/><circle cx="192" cy="92" r="3" fill="#f2c14e"/></g>' +
+        '<g id="' + id + 'eL"><ellipse cx="0" cy="0" rx="21" ry="18" fill="#fff" stroke="#6b4a36" stroke-width="2"/><g class="pp"><circle cx="0" cy="0" r="9.5" fill="#3b2314"/><circle cx="0" cy="0" r="4.6" fill="#0c0603"/><circle cx="-3.4" cy="-3.6" r="2.7" fill="#fff"/></g></g>' +
+        '<g id="' + id + 'eR"><ellipse cx="0" cy="0" rx="21" ry="18" fill="#fff" stroke="#6b4a36" stroke-width="2"/><g class="pp"><circle cx="0" cy="0" r="9.5" fill="#3b2314"/><circle cx="0" cy="0" r="4.6" fill="#0c0603"/><circle cx="-3.4" cy="-3.6" r="2.7" fill="#fff"/></g></g>' +
+        '<path id="' + id + 'aL" d="M-19 5 Q0 -17 19 5" fill="none" stroke="#2a1608" stroke-width="6" stroke-linecap="round" opacity="0"/>' +
+        '<path id="' + id + 'aR" d="M-19 5 Q0 -17 19 5" fill="none" stroke="#2a1608" stroke-width="6" stroke-linecap="round" opacity="0"/>' +
+        '<g id="' + id + 'tL" opacity="0"><path d="M0 -9 Q9 6 0 12 Q-9 6 0 -9Z" fill="#6fc8ff" stroke="#2a8fd0" stroke-width="1.5"/></g>' +
+        '<g id="' + id + 'tR" opacity="0"><path d="M0 -9 Q9 6 0 12 Q-9 6 0 -9Z" fill="#6fc8ff" stroke="#2a8fd0" stroke-width="1.5"/></g>' +
+        '<g id="' + id + 'tL2" opacity="0"><path d="M0 -9 Q9 6 0 12 Q-9 6 0 -9Z" fill="#6fc8ff" stroke="#2a8fd0" stroke-width="1.5"/></g>' +
+        '<g id="' + id + 'tR2" opacity="0"><path d="M0 -9 Q9 6 0 12 Q-9 6 0 -9Z" fill="#6fc8ff" stroke="#2a8fd0" stroke-width="1.5"/></g>' +
+        '<g id="' + id + 'bL"><path d="M-30 0 Q0 -14 30 0" fill="none" stroke="#17120e" stroke-width="13" stroke-linecap="round"/></g>' +
+        '<g id="' + id + 'bR"><path d="M-30 0 Q0 -14 30 0" fill="none" stroke="#17120e" stroke-width="13" stroke-linecap="round"/></g>' +
+        '<ellipse id="' + id + 'ns" cx="150" cy="190" rx="14" ry="12" fill="#e5a679" stroke="#c98d63" stroke-width="2"/>' +
+        '<g id="' + id + 'mouth"><path id="' + id + 'mp" d="" fill="#4a0d18" stroke="#2a0509" stroke-width="4" stroke-linejoin="round"/>' +
+          '<g clip-path="url(#' + id + 'm)"><rect id="' + id + 'th" x="90" y="200" width="120" height="14" fill="#fffdf6"/><ellipse id="' + id + 'tg" cx="150" cy="250" rx="22" ry="11" fill="#e8607a"/></g></g>' +
+        '<g id="' + id + 'ms"><path d="M150 214 Q128 196 96 214 Q108 232 132 224 Q144 222 150 224 Z" fill="#17120e"/><path d="M150 214 Q172 196 204 214 Q192 232 168 224 Q156 222 150 224 Z" fill="#17120e"/></g>' +
+        '<g id="' + id + 'mk" opacity="0" stroke="#e11d1d" stroke-width="6" stroke-linecap="round" fill="none"><path d="M-4 -16 Q-4 -6 -15 -4M4 -16 Q4 -6 15 -4M-4 16 Q-4 6 -15 4M4 16 Q4 6 15 4"/></g>' +
+      '</g></svg>';
+    return id;
+  }
+
+  function create(host) {
+    var id = build(host);
+    var $ = function (s) { return host.querySelector("#" + id + s); };
+    var el = { bg: $("bg"), rays: $("rays"), hd: $("hd"), body: $("body"), dp: $("dp"), fl: $("fl"), eL: $("eL"), eR: $("eR"), aL: $("aL"), aR: $("aR"),
+      bL: $("bL"), bR: $("bR"), ns: $("ns"), mp: $("mp"), mc: $("mc"), th: $("th"), tg: $("tg"), ms: $("ms"), mk: $("mk"),
+      tL: $("tL"), tR: $("tR"), tL2: $("tL2"), tR2: $("tR2"), sL: $("steamL"), sR: $("steamR") };
+    var ppL = el.eL.querySelector(".pp"), ppR = el.eR.querySelector(".pp");
+    var i, rays = "";
+    for (i = 0; i < 12; i++) { var a = i / 12 * Math.PI * 2; rays += '<line x1="' + (150 + Math.cos(a) * 118) + '" y1="' + (150 + Math.sin(a) * 118) + '" x2="' + (150 + Math.cos(a) * 146) + '" y2="' + (150 + Math.sin(a) * 146) + '"/>'; }
+    el.rays.innerHTML = rays;
+    var puffs = [];
+    function mkPuffs(g) { for (var k = 0; k < 3; k++) { var c = document.createElementNS("http://www.w3.org/2000/svg", "circle"); c.setAttribute("fill", "#fff"); c.setAttribute("opacity", "0"); g.appendChild(c); puffs.push({ c: c, side: g === el.sL ? -1 : 1, k: k }); } }
+    mkPuffs(el.sL); mkPuffs(el.sR);
+
+    var cur = {}, tgt = {}, k0;
+    for (k0 in E.idle) { cur[k0] = E.idle[k0]; tgt[k0] = E.idle[k0]; }
+    var S = { emo: "idle", talking: false, ana: null, buf: null, lvl: 0, open: 0, blink: 0, nextBlink: 1.5, look: { x: 0, y: 0 }, lookT: { x: 0, y: 0 }, intro: 0, poke: 0, t0: performance.now(), last: performance.now(), raf: 0, paused: false, pokeEmo: null, hold: 0 };
+
+    function set(name) { if (!E[name]) name = "speak"; S.emo = name; for (var k in E[name]) tgt[k] = E[name][k]; }
+    function level() {
+      if (S.ana) {
+        if (!S.buf) S.buf = new Uint8Array(S.ana.fftSize);
+        S.ana.getByteTimeDomainData(S.buf);
+        var s = 0, j; for (j = 0; j < S.buf.length; j++) { var v = (S.buf[j] - 128) / 128; s += v * v; }
+        return clamp(Math.sqrt(s / S.buf.length) * 4.2, 0, 1);
+      }
+      if (S.talking) { var t = (performance.now() - S.t0) / 1000; return clamp(0.45 + 0.4 * Math.sin(t * 13) * Math.sin(t * 5.3 + 1) + 0.15 * Math.sin(t * 31), 0.05, 1); }
+      return 0;
+    }
+    function mouthPath(w, cy, s, open) {
+      var cornerY = cy - s * 16, up = cy + 10 * s, low = up + open * 72;
+      var L = 150 - w, R = 150 + w;
+      return "M" + L + " " + cornerY + " Q150 " + up + " " + R + " " + cornerY + " Q150 " + low + " " + L + " " + cornerY + " Z";
+    }
+    function frame(now) {
+      S.raf = requestAnimationFrame(frame);
+      if (S.paused || document.hidden) { S.last = now; return; }
+      var dt = Math.min(0.05, (now - S.last) / 1000); S.last = now;
+      var t = (now - S.t0) / 1000, kk = 1 - Math.exp(-dt * 9), k;
+      for (k in cur) cur[k] += (tgt[k] - cur[k]) * kk;
+      // kirish (intro): ko'zlar katta, qoshlar ko'tarilgan
+      if (S.intro > 0) S.intro = Math.max(0, S.intro - dt);
+      var intro = S.intro > 0 ? Math.sin(Math.min(1, S.intro / 1.1) * Math.PI) : 0;
+      // turtki (poke): bosilganda qisqa jahl
+      var emoNow = S.emo;
+      if (S.hold > 0) { S.hold -= dt; if (S.hold <= 0) { S.hold = 0; set(S.pokeEmo || "idle"); } }
+      var lv = level(); S.lvl += (lv - S.lvl) * (1 - Math.exp(-dt * 24));
+      var openT;
+      if (cur.laugh > 0.5) openT = 0.5 + 0.38 * Math.abs(Math.sin(t * 17));
+      else if (cur.tears > 0.8) openT = 0.12 + S.lvl * 0.7 + 0.1 * Math.sin(t * 9);
+      else openT = S.lvl * 1.15 + (cur.happy > 0.5 ? 0.18 : 0) + (cur.steam > 0.5 && S.lvl > 0.03 ? 0.14 : 0);
+      S.open += (clamp(openT, 0, 1) - S.open) * (1 - Math.exp(-dt * 28));
+      // ko'z pirpirashi
+      S.nextBlink -= dt;
+      if (S.nextBlink <= 0 && S.blink === 0) { S.blink = 0.0001; }
+      if (S.blink > 0) { S.blink += dt / 0.16; if (S.blink >= 2) { S.blink = 0; S.nextBlink = 1.8 + Math.random() * 3.8; } }
+      var bl = S.blink > 0 ? (S.blink < 1 ? S.blink : 2 - S.blink) : 0;
+      // qarash
+      S.look.x += (S.lookT.x - S.look.x) * (1 - Math.exp(-dt * 10)); S.look.y += (S.lookT.y - S.look.y) * (1 - Math.exp(-dt * 10));
+      var idleLx = Math.sin(t * 0.7) * 2.2 + Math.sin(t * 1.9) * 1, idleLy = Math.sin(t * 0.9 + 1) * 1.4;
+      var lx = S.look.x * 7 + idleLx, ly = S.look.y * 6 + idleLy;
+      var angry = cur.steam, shake = cur.shake * (angry > 0.4 ? 1 : 0.25);
+      // bosh
+      var hx = Math.sin(t * 46) * shake * 2.4, hy = Math.sin(t * 2) * 1.6 * (1 - cur.laugh) + (cur.laugh > 0.3 ? -Math.abs(Math.sin(t * 14)) * 7 * cur.laugh : 0) + (S.lvl * 2.2);
+      var hr = Math.sin(t * 13) * 3.5 * cur.laugh + Math.sin(t * 1.3) * 0.9 + Math.sin(t * 33) * shake * 1.1 + (cur.tears > 0.5 ? Math.sin(t * 6) * 1.5 : 0);
+      var hs = 1 + 0.012 * Math.sin(t * 2.1) + S.lvl * 0.012 + intro * 0.04;
+      el.hd.setAttribute("transform", "translate(" + (150 + hx) + " " + (190 + hy) + ") rotate(" + hr + ") scale(" + hs + ") translate(-150 -190)");
+      el.body.setAttribute("transform", "translate(0 " + (Math.sin(t * 2 + 0.6) * 1.4 + (cur.laugh > 0.3 ? Math.abs(Math.sin(t * 14)) * 3 : 0)) + ")");
+      // doppi sakraydi (jahlda)
+      el.dp.setAttribute("transform", "translate(0 " + (-10 - (angry * Math.abs(Math.sin(t * 19))) * 4.5) + ")");
+      // fon va yuz qizarishi
+      el.bg.setAttribute("fill", mix("#ffcf99", "#e5413a", cur.flush * 0.85));
+      el.fl.setAttribute("opacity", (cur.flush * 0.5).toFixed(3));
+      el.rays.setAttribute("opacity", (cur.happy * 0.8 + cur.laugh * 0.35).toFixed(3));
+      el.rays.setAttribute("transform", "rotate(" + (t * 14) + " 150 150)");
+      // qoshlar
+      var br = cur.brow, bY = cur.browY - intro * 9;
+      var angleL = -br * 24, angleR = br * 24;
+      var browLift = (1 - br) * 0;   // (joy qoldirilgan)
+      el.bL.setAttribute("transform", "translate(110 " + (135 + bY - cur.happy * 2) + ") rotate(" + angleL + ")");
+      el.bR.setAttribute("transform", "translate(190 " + (135 + bY - cur.happy * 2) + ") rotate(" + angleR + ")");
+      // ko'zlar
+      var eo = clamp(cur.eye + intro * 0.3, 0.05, 1.25) * (1 - bl * 0.97);
+      var squint = cur.laugh > 0.5 || cur.happy > 0.6;
+      var arcs = clamp((cur.laugh - 0.4) * 2.2, 0, 1) || clamp((cur.happy - 0.55) * 2.2, 0, 1);
+      var eyeShow = 1 - arcs;
+      var eyeSc = Math.min(eo, 1.12);
+      el.eL.setAttribute("transform", "translate(112 152) scale(1 " + eyeSc + ")"); el.eR.setAttribute("transform", "translate(188 152) scale(1 " + eyeSc + ")");
+      el.eL.setAttribute("opacity", eyeShow); el.eR.setAttribute("opacity", eyeShow);
+      var pr = 1 + (angry > 0.5 ? -0.12 : 0) + intro * 0.1, pv = "translate(" + lx + " " + ly / Math.max(0.5, eyeSc) + ") scale(" + pr + ")";
+      ppL.setAttribute("transform", pv); ppR.setAttribute("transform", pv);
+      el.aL.setAttribute("transform", "translate(112 156)"); el.aR.setAttribute("transform", "translate(188 156)");
+      el.aL.setAttribute("opacity", arcs); el.aR.setAttribute("opacity", arcs);
+      // ko'z yoshlari
+      function tear(g, x, y0, ph, a) {
+        var p = (t * 0.9 + ph) % 1; g.setAttribute("transform", "translate(" + (x + (x < 150 ? -p * 5 : p * 5)) + " " + (y0 + p * 62) + ") scale(" + (0.6 + p * 0.6) + ")");
+        g.setAttribute("opacity", (a * Math.sin(Math.min(1, p) * Math.PI) * 0.95).toFixed(3));
+      }
+      tear(el.tL, 100, 166, 0, cur.tears); tear(el.tR, 200, 166, 0.2, cur.tears); tear(el.tL2, 108, 166, 0.55, cur.tears); tear(el.tR2, 192, 166, 0.75, cur.tears);
+      // burun
+      el.ns.setAttribute("transform", "translate(150 190) scale(" + (1 + angry * 0.16 + S.lvl * 0.04) + " " + (1 + angry * 0.05) + ") translate(-150 -190)");
+      // og'iz
+      var smile = clamp(cur.smile, -1, 1), w = 36 + Math.max(0, smile) * 10 + S.open * 4 + angry * 4;
+      var mcy = 249 - S.open * 2;
+      var d = mouthPath(w, mcy, smile, S.open);
+      el.mp.setAttribute("d", d); el.mc.setAttribute("d", d);
+      var midUp = mcy + 5 * smile - smile * 8 + 4;
+      el.th.setAttribute("y", midUp - 12); el.th.setAttribute("opacity", S.open > 0.12 ? 1 : 0);
+      el.th.setAttribute("height", 11 + S.open * 5);
+      el.tg.setAttribute("cy", mcy + S.open * 44 + 2); el.tg.setAttribute("rx", 14 + S.open * 12);
+      el.mp.setAttribute("fill", S.open > 0.06 ? "#4a0d18" : "#2a0509");
+      // mo'ylov
+      el.ms.setAttribute("transform", "translate(0 -11) translate(150 224) scale(" + (1 + S.open * 0.03 + angry * 0.03) + " " + (1 + Math.sin(t * 3) * 0.01) + ") rotate(" + (-S.open * 2 + Math.sin(t * 40) * shake * 1) + ") translate(-150 -224) translate(0 " + (-S.open * 1.5 - Math.max(0, -smile) * 4) + ")");
+      // jahl belgisi
+      el.mk.setAttribute("opacity", clamp(angry * 1.2, 0, 1).toFixed(3));
+      el.mk.setAttribute("transform", "translate(232 104) scale(" + (1.2 + 0.22 * Math.sin(t * 13)) + ") rotate(" + (Math.sin(t * 5) * 8) + ")");
+      // bug' (quloqlardan)
+      puffs.forEach(function (p) {
+        var ph = (t * 0.9 + p.k / 3) % 1, x = p.side < 0 ? 52 : 248, y = 150 - ph * 78;
+        p.c.setAttribute("cx", x + p.side * ph * 16 + Math.sin(t * 6 + p.k) * 3); p.c.setAttribute("cy", y);
+        p.c.setAttribute("r", 7 + ph * 15); p.c.setAttribute("opacity", (angry * (1 - ph) * 0.85).toFixed(3));
+      });
+    }
+    S.raf = requestAnimationFrame(frame);
+
+    // sichqoncha / barmoq tomon qarash
+    function onMove(e) {
+      var r = host.getBoundingClientRect(); if (!r.width) return;
+      var px = (e.clientX - (r.left + r.width / 2)) / Math.max(180, window.innerWidth * 0.5), py = (e.clientY - (r.top + r.height / 2)) / Math.max(180, window.innerHeight * 0.5);
+      S.lookT.x = clamp(px, -1, 1); S.lookT.y = clamp(py, -1, 1);
+    }
+    window.addEventListener("pointermove", onMove, { passive: true });
+    host.style.cursor = "pointer";
+    host.addEventListener("click", function () {   // ustozni turtib ko'ring
+      var back = S.emo === "angry" ? "angry" : (S.talking || S.ana ? "speak" : "idle");
+      S.pokeEmo = back; set("angry"); S.hold = 1.2;
+    });
+    return {
+      set: set,
+      talking: function (v) { S.talking = !!v; },
+      analyser: function (a) { S.ana = a || null; S.buf = null; },
+      enter: function () { S.intro = 1.1; host.classList.remove("av-pop"); void host.offsetWidth; host.classList.add("av-pop"); },
+      emotion: function () { return S.emo; },
+      destroy: function () { cancelAnimationFrame(S.raf); window.removeEventListener("pointermove", onMove); }
+    };
+  }
+  return { create: create };
+})();
+
+</script>
+<script>
 (function () {
   "use strict";
   var $ = function (i) { return document.getElementById(i); };
@@ -92,7 +306,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
   var mic = null, recorder = null, chunks = [], rec = false, busy = false, audio = null, tick = null, left = 0, ctx = null;
 
   function noMic(t, p) { $("msg-t").textContent = t; $("msg-p").textContent = p; show("s-msg"); }
-  function show(id) { ["s-msg", "s-hello", "s-chat", "s-end"].forEach(function (s) { $(s).classList.toggle("hide", s !== id); }); }
+  function show(id) { ["s-msg", "s-hello", "s-chat", "s-end"].forEach(function (s) { $(s).classList.toggle("hide", s !== id); }); if (id === "s-chat") avC.enter(); if (id === "s-hello") avH.enter(); }
   function state(t) { $("state").textContent = t; }
   function fmt(s) { s = Math.max(0, s | 0); return Math.floor(s / 60) + ":" + ("0" + (s % 60)).slice(-2); }
   function setLeft(s) { left = s; $("left").textContent = fmt(s); }
@@ -183,18 +397,24 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
   function post(path, opts) { return fetch(path, opts).then(function (r) { return r.json().then(function (j) { j._st = r.status; return j; }); }); }
   function stopMic() { if (mic) { mic.getTracks().forEach(function (t) { t.stop(); }); mic = null; } }
 
-  // ---- avatar: hissiyatga qarab video almashadi ----
-  var av = $("av-v"), avCur = "";
-  var CLIPS = { idle: "media/idle.mp4", speak: "media/speak.mp4", angry: "media/angry.mp4", angry_start: "media/angry_start.mp4", cry: "media/cry.mp4", laugh: "media/laugh.mp4" };
+  // ---- avatar: 2D SVG ustoz; hissiyatga qarab yuzi o'zgaradi, og'zi ovozga mos ochiladi ----
+  var avCur = "", avC = RumiyoAvatar.create($("av")), avH = RumiyoAvatar.create($("av-h"));
+  avH.set("happy"); setTimeout(function () { avH.set("idle"); }, 1800);
   function setAv(n) {
+    if (n === "angry_start") n = "angry";
     if (n === avCur) return; avCur = n;
-    av.loop = n !== "angry_start"; av.src = CLIPS[n];
-    var p = av.play(); if (p && p.catch) p.catch(function () {});
-    document.body.classList.toggle("angry", n === "angry" || n === "angry_start");
+    avC.set(n); avC.talking(n !== "idle");
+    document.body.classList.toggle("angry", n === "angry");
   }
-  av.onended = function () { if (avCur === "angry_start") { avCur = ""; setAv("angry"); } };
-  av.onerror = function () { if (avCur === "laugh") { avCur = ""; setAv("speak"); } else { $("av").hidden = true; } };
-  function emoClip(e) { return e === "angry" ? "angry_start" : e === "cry" ? "cry" : e === "happy" ? "laugh" : "speak"; }
+  function emoClip(e) { return e === "angry" ? "angry" : e === "cry" ? "cry" : e === "happy" ? "happy" : "speak"; }
+  // jonli rejimda hissiyat Rumiyo aytgan matndan aniqlanadi
+  function moodFrom(t) {
+    if (/\b(h[ie]h|hi-?hi|ha-?ha|haha|ahaha|xa-?xa|xaxa)\b|kul(di|ma|ib|aman)/i.test(t)) return "laugh";
+    if (/yig['\u2018\u2019`]?l(a|ab|ay)|voy onam|achinar/i.test(t)) return "cry";
+    if (/barakalla|molodets|ofarin|to['\u2018\u2019`]?g['\u2018\u2019`]?ri aytding|yaxshi bo['\u2018\u2019`]?ldi|qoyil/i.test(t)) return "happy";
+    if ((t.match(/!/g) || []).length >= 2 || /\b(hoy|eee+|ahmoq|patsan|necha marta|jahlim|bo['\u2018\u2019`]?ldi endi)\b/i.test(t)) return "angry";
+    return "speak";
+  }
 
   function finish(j) {
     stopMic(); if (tick) clearInterval(tick); document.body.classList.remove("angry");
@@ -226,9 +446,9 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
     var i16 = new Int16Array(buf), f = new Float32Array(i16.length);
     for (var i = 0; i < i16.length; i++) f[i] = i16[i] / 32768;
     var ab = L.pctx.createBuffer(1, f.length, 24000); ab.copyToChannel(f, 0);
-    var src = L.pctx.createBufferSource(); src.buffer = ab; src.connect(L.pctx.destination);
+    var src = L.pctx.createBufferSource(); src.buffer = ab; src.connect(L.ana || L.pctx.destination);
     var t = Math.max(L.pctx.currentTime + 0.03, L.next); src.start(t); L.next = t + ab.duration;
-    L.srcs.push(src); setAv(emoClip("angry"));
+    L.srcs.push(src); setAv(L.mood || "speak");
     src.onended = function () { var k = L.srcs.indexOf(src); if (k >= 0) L.srcs.splice(k, 1); if (!L.srcs.length) { setAv("idle"); } };
   }
   function liveStopPlay(L) { L.srcs.forEach(function (x) { try { x.stop(); } catch (e) {} }); L.srcs = []; L.next = 0; setAv("idle"); }
@@ -236,7 +456,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
     var L = live; if (!L || L.closed) return; L.closed = true;
     try { if (L.proc) { L.proc.disconnect(); L.proc.onaudioprocess = null; } } catch (e) {}
     try { if (L.cin) L.cin.close(); } catch (e) {}
-    try { liveStopPlay(L); if (L.pctx) L.pctx.close(); } catch (e) {}
+    try { avC.analyser(null); liveStopPlay(L); if (L.pctx) L.pctx.close(); } catch (e) {}
     try { L.ws.close(); } catch (e) {}
     $("b-mic").classList.remove("rec");
   }
@@ -274,6 +494,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
     state("Ulanyapman…"); $("b-mic").disabled = true;
     try {
       L.pctx = new AC(); if (L.pctx.resume) L.pctx.resume();
+      try { L.ana = L.pctx.createAnalyser(); L.ana.fftSize = 512; L.ana.connect(L.pctx.destination); avC.analyser(L.ana); } catch (e) { L.ana = null; }
       L.cin = new AC(); if (L.cin.resume) L.cin.resume();
       var srcNode = L.cin.createMediaStreamSource(mic), ratio = L.cin.sampleRate / 16000;
       L.proc = L.cin.createScriptProcessor(2048, 1, 1);
@@ -297,9 +518,9 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
       var o; try { o = JSON.parse(e.data); } catch (x) { return; }
       if (o.t === "ready") { L.ready = true; L.ptt = o.ptt !== false; setLeft(o.left); $("b-mic").disabled = false; if (L.ptt) { state("Rumiyo salom beryapti… gapirmoqchi bo'lsangiz tugmani bosing"); } else { $("b-mic").classList.add("rec"); state("Eshityapman… istagan payt gapiring, Rumiyo to'xtaydi"); } }
       else if (o.t === "in") { if (!L.curMe) L.curMe = mkBubble("me"); L.curMe.textContent += o.text; L.curAi = null; $("log").scrollTop = 1e9; }
-      else if (o.t === "out") { if (!L.curAi) L.curAi = mkBubble("ai"); L.curAi.textContent += o.text; L.curMe = null; $("log").scrollTop = 1e9; }
+      else if (o.t === "out") { if (!L.curAi) L.curAi = mkBubble("ai"); L.curAi.textContent += o.text; L.curMe = null; $("log").scrollTop = 1e9; L.outText = (L.outText || "") + o.text; var mo = moodFrom(L.outText); if (mo !== "speak") L.mood = mo; if (L.srcs.length) setAv(L.mood || "speak"); }
       else if (o.t === "int") { liveStopPlay(L); L.curAi = null; }
-      else if (o.t === "turn") { L.curMe = null; L.curAi = null; if (L.ptt && !L.talking) state("Sizning navbatingiz: tugmani bosib gapiring 🎙"); }
+      else if (o.t === "turn") { L.curMe = null; L.curAi = null; L.outText = ""; L.mood = "speak"; if (L.ptt && !L.talking) state("Sizning navbatingiz: tugmani bosib gapiring 🎙"); }
       else if (o.t === "left") { setLeft(o.left); }
       else if (o.t === "nolive") { liveFail(); }
       else if (o.t === "error") { liveCleanup(); state(o.error || "Xatolik"); }
