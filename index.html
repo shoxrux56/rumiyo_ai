@@ -56,6 +56,12 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 .pc .e{font-size:1.4rem}
 .pc[aria-pressed=true]{border-color:var(--acc);box-shadow:0 0 0 3px rgba(232,89,12,.18);transform:translateY(-2px)}
 .chg{font-size:.9rem}
+.arow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.ac{border:2px solid var(--line);background:var(--surf);color:inherit;border-radius:14px;padding:5px 5px 7px;font:inherit;cursor:pointer;display:flex;flex-direction:column;gap:3px;align-items:center;transition:transform .15s,border-color .15s,box-shadow .15s}
+.ac img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;display:block}
+.ac b{font-size:.82rem}
+.ac[aria-pressed=true]{border-color:var(--acc);box-shadow:0 0 0 3px rgba(232,89,12,.18);transform:translateY(-2px)}
+.note{font-size:.78rem;color:var(--mut);margin:2px 0 0}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -68,18 +74,29 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
     
     <h1 id="h-title">Ustozingizni tanlang</h1>
     <div class="pick" id="pick" role="group" aria-label="Ustoz tanlash">
-      <div class="gl">👨 Erkak ustoz</div>
+      <div class="gl">1. Siz kimsiz?</div>
       <div class="prow">
-        <button type="button" class="pc" data-p="friendly" aria-pressed="false"><span class="e">😊</span><b>Do'stona</b><span>«Jonim» deb gaplashadi, hazil bilan o'rgatadi</span></button>
-        <button type="button" class="pc" data-p="angry" aria-pressed="false"><span class="e">😠</span><b>Jahldor</b><span>Jahli tez, lekin juda kulgili</span></button>
+        <button type="button" class="pc" data-g="m" aria-pressed="false"><span class="e">👦</span><b>O'g'il bola</b></button>
+        <button type="button" class="pc" data-g="f" aria-pressed="false"><span class="e">👧</span><b>Qiz</b></button>
       </div>
-      <div class="gl">👩 Ayol ustoz</div>
+      <div class="gl">2. Ustoz ko'rinishi</div>
+      <div class="arow">
+        <button type="button" class="ac" data-a="m1" aria-pressed="false"><img src="vrm/th-m1.jpg" alt="Erkak ustoz" width="120" height="120"><b>Erkak ustoz</b></button>
+        <button type="button" class="ac" data-a="f1" aria-pressed="false"><img src="vrm/th-f1.jpg" alt="Ayol ustoza" width="120" height="120"><b>Ayol ustoza</b></button>
+        <button type="button" class="ac" data-a="f2" aria-pressed="false"><img src="vrm/th-f2.jpg" alt="Ayol ustoza" width="120" height="120"><b>Ayol ustoza</b></button>
+      </div>
+      <div class="gl">3. Xarakteri</div>
       <div class="prow">
-        <button type="button" class="pc" data-p="fiery" aria-pressed="false"><span class="e">🔥</span><b>Ehtirosli</b><span>Olovli, ishtiyoqli, ruhlantiradi</span></button>
-        <button type="button" class="pc" data-p="sweet" aria-pressed="false"><span class="e">🍯</span><b>Shirin so'z</b><span>Yumshoq, mehribon, maqtab o'rgatadi</span></button>
+        <button type="button" class="pc" data-c="friendly" aria-pressed="false"><span class="e">😊</span><b>Do'stona</b><span>«Jonim» deb gaplashadi, hazil bilan o'rgatadi</span></button>
+        <button type="button" class="pc" data-c="angry" aria-pressed="false"><span class="e">😠</span><b>Jahldor</b><span>Jahli tez, lekin juda kulgili</span></button>
+        <button type="button" class="pc" data-c="fiery" aria-pressed="false"><span class="e">🔥</span><b>Ehtirosli</b><span>Olovli, uyg'otadi, «Ahh!» deb kuladi</span></button>
+        <button type="button" class="pc" data-c="sweet" aria-pressed="false"><span class="e">🍯</span><b>Shirin so'z</b><span>Yumshoq, mehribon, maqtab o'rgatadi</span></button>
       </div>
+      <p class="note">Tanlovni 1 haftadan keyin o'zgartirish mumkin.</p>
     </div>
     <button type="button" id="b-chg" class="link chg" hidden>Ustozni o'zgartirish</button>
+    <p id="lockmsg" class="note" hidden></p>
+    <p id="pickhint" class="note" hidden style="color:var(--acc)">Avval jinsingiz, ustoz ko'rinishi va xarakterni tanlang</p>
     <p class="lead" id="h-topic">Bugungi darsni ruscha gaplashib mustahkamlaymiz. Mikrofonga ruxsat bering.</p>
     <button id="b-go" class="orb big" aria-label="Boshlash"><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
     <p class="state">Boshlash uchun bosing</p>
@@ -429,16 +446,14 @@ var RumiyoAvatar = (function () {
 
   // ---- avatar: 2D SVG ustoz; hissiyatga qarab yuzi o'zgaradi, og'zi ovozga mos ochiladi ----
   // 3D VRM avatar (WebGL); qurilmada WebGL yoki model yuklanmasa, 2D SVG avatarga o'tadi
-  var PERS = {
-    friendly: { vrm: "vrm/ustoz-jonim.vrm", name: "Do'stona ustoz", cls: "fr", soft: true },
-    angry: { vrm: "vrm/ustoz-jahldor.vrm", name: "Jahldor ustoz", cls: "", soft: false },
-    fiery: { vrm: "vrm/ustoz-ehtirosli.vrm", name: "Ehtirosli ustoza", cls: "fi", soft: true },
-    sweet: { vrm: "vrm/ustoz-shirin.vrm", name: "Shirin so'z ustoza", cls: "sw", soft: true }
-  };
-  var persona = "friendly", chosen = false, gender = "";
-  try { var sp = localStorage.getItem("rumiyo_persona"); if (PERS[sp]) { persona = sp; chosen = true; } } catch (e) {}
+  var AV = { m1: { vrm: "vrm/ustoz-m1.vrm", s: "m" }, f1: { vrm: "vrm/ustoz-f1.vrm", s: "f" }, f2: { vrm: "vrm/ustoz-f2.vrm", s: "f" } };
+  var CH = { friendly: { n: "Do'stona", cls: "fr" }, angry: { n: "Jahldor", cls: "" }, fiery: { n: "Ehtirosli", cls: "fi" }, sweet: { n: "Shirin so'z", cls: "sw" } };
+  var P = { a: "m1", c: "friendly" }, chosen = false, gender = "", lockLeft = 0, picking = false;
+  try { var sp = JSON.parse(localStorage.getItem("rumiyo_pick") || "null"); if (sp && AV[sp.a] && CH[sp.c]) { P = { a: sp.a, c: sp.c }; chosen = true; } } catch (e) {}
   try { var sg = localStorage.getItem("rumiyo_g"); if (sg === "m" || sg === "f") gender = sg; } catch (e) {}
-  function soft() { return PERS[persona].soft; }
+  var persona = P.a + "." + P.c;     // serverga "avatar.xarakter" ko'rinishida ketadi
+  function soft() { return P.c !== "angry"; }
+  function tname() { return CH[P.c].n + (AV[P.a].s === "f" ? " ustoza" : " ustoz"); }
   function makeAv(host) {
     var cur = null, curUrl = "", st = { emo: "idle", talking: false, ana: null };
     function webgl() { try { var c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); } catch (e) { return false; } }
@@ -449,7 +464,7 @@ var RumiyoAvatar = (function () {
     }
     try {
       if (!window.RumiyoVRM || !webgl()) throw 0;
-      curUrl = PERS[persona].vrm; cur = RumiyoVRM.create(host, { url: curUrl }); cur.onFail(useSvg);
+      curUrl = AV[P.a].vrm; cur = RumiyoVRM.create(host, { url: curUrl }); cur.onFail(useSvg);
       if (cur.friendly) cur.friendly(soft());
     } catch (e) { useSvg(); }
     return {
@@ -460,29 +475,52 @@ var RumiyoAvatar = (function () {
   }
   var avCur = "", avC = makeAv($("av")), avH = avC;
   avH.set("happy"); setTimeout(function () { avH.set("idle"); }, 1800);
-  function pickPersona(p, fromUser) {
-    persona = PERS[p] ? p : "friendly";
-    if (fromUser) { chosen = true; try { localStorage.setItem("rumiyo_persona", persona); } catch (e) {} }
-    var bs = document.querySelectorAll(".pc");
-    for (var i = 0; i < bs.length; i++) bs[i].setAttribute("aria-pressed", bs[i].getAttribute("data-p") === persona);
-    $("av").classList.remove("fr", "fi", "sw"); if (PERS[persona].cls) $("av").classList.add(PERS[persona].cls);
-    $("c-name").textContent = PERS[persona].name;
+  var sel = { g: gender, a: chosen ? P.a : "", c: chosen ? P.c : "" };
+  function saveLocal() { try { localStorage.setItem("rumiyo_pick", JSON.stringify(P)); if (gender) localStorage.setItem("rumiyo_g", gender); } catch (e) {} }
+  function applyPick(fromUser) {
+    persona = P.a + "." + P.c;
+    var bs = document.querySelectorAll("#pick button");
+    for (var i = 0; i < bs.length; i++) {
+      var d = bs[i].dataset;
+      bs[i].setAttribute("aria-pressed", (d.g && sel.g === d.g) || (d.a && sel.a === d.a) || (d.c && sel.c === d.c) ? "true" : "false");
+    }
+    $("av").classList.remove("fr", "fi", "sw"); if (CH[P.c].cls) $("av").classList.add(CH[P.c].cls);
+    $("c-name").textContent = tname();
     document.body.classList.remove("angry"); avCur = "";
-    avC.model(PERS[persona].vrm, soft());
-    if (fromUser) { avC.enter(); avC.set(soft() ? "happy" : "angry"); setTimeout(function () { avC.set("idle"); }, 1400); picking = true; helloMode(); }
+    avC.model(AV[P.a].vrm, soft());
+    if (fromUser) { avC.enter(); avC.set(soft() ? "happy" : "angry"); setTimeout(function () { avC.set("idle"); }, 1400); }
   }
-  // tanlangan bo'lsa: tanlash paneli yashirinadi, "Ustozni o'zgartirish" ko'rinadi (bir marta tanlanadi)
-  var picking = false;
+  // tanlangan bo'lsa panel yashirinadi; o'zgartirish tugmasi faqat qulf (1 hafta) tugagach ko'rinadi
   function helloMode() {
-    var showPick = !chosen || picking;
-    $("pick").hidden = !showPick; $("b-chg").hidden = showPick;
-    $("h-title").textContent = showPick ? "Ustozingizni tanlang" : PERS[persona].name + " bilan gaplashamiz";
+    var showPick = !chosen || picking, locked = chosen && !picking && lockLeft > 0;
+    $("pick").hidden = !showPick; $("b-chg").hidden = showPick || locked; $("pickhint").hidden = true;
+    $("lockmsg").hidden = showPick || !locked;
+    if (locked) { var dl = Math.ceil(lockLeft / 86400); $("lockmsg").textContent = "Ustozni " + dl + " kundan keyin o'zgartirish mumkin"; }
+    $("h-title").textContent = showPick ? "Ustozingizni tanlang" : tname() + " bilan gaplashamiz";
   }
-  var pcs = document.querySelectorAll(".pc");
-  for (var pi = 0; pi < pcs.length; pi++) (function (b) { b.onclick = function () { pickPersona(b.getAttribute("data-p"), true); }; })(pcs[pi]);
-  $("b-chg").onclick = function () { picking = true; helloMode(); };
-  $("b-go").addEventListener("click", function () { picking = false; helloMode(); });
-  pickPersona(persona, false); helloMode();
+  var pbs = document.querySelectorAll("#pick button");
+  for (var pi = 0; pi < pbs.length; pi++) (function (b) {
+    b.onclick = function () {
+      var d = b.dataset;
+      if (d.g) { gender = d.g; sel.g = d.g; } else if (d.a) { P.a = d.a; sel.a = d.a; } else if (d.c) { P.c = d.c; sel.c = d.c; }
+      applyPick(!!(d.a || d.c)); $("pickhint").hidden = true;
+    };
+  })(pbs[pi]);
+  $("b-chg").onclick = function () { picking = true; sel = { g: gender, a: P.a, c: P.c }; helloMode(); applyPick(false); };
+  // Boshlash: tanlov to'liq bo'lmasa to'xtatadi; to'liq bo'lsa tanlovni qulflaydi (server ham 1 hafta o'zgartirtirmaydi)
+  $("b-go").addEventListener("click", function (e) {
+    if (chosen && !picking) return;
+    if (!sel.g || !sel.a || !sel.c) { e.stopImmediatePropagation(); $("pickhint").hidden = false; return; }
+    if (!chosen || picking) lockLeft = 7 * 86400;
+    chosen = true; picking = false; saveLocal(); helloMode();
+  }, true);
+  fetch("ai/me?t=" + encodeURIComponent(token)).then(function (r) { return r.json(); }).then(function (j) {
+    if (!j || !j.ok) return;
+    if (j.g) { gender = j.g; sel.g = j.g; }
+    if (AV[j.avatar] && CH[j.char]) { P = { a: j.avatar, c: j.char }; chosen = true; sel = { g: gender, a: P.a, c: P.c }; lockLeft = j.lock_left || 0; }
+    applyPick(false); helloMode(); saveLocal();
+  }).catch(function () {});
+  applyPick(false); helloMode();
   function setAv(n) {
     if (n === "angry_start") n = "angry";
     if (soft()) { if (n === "speak") n = "warm"; else if (n === "angry") n = "happy"; }
@@ -493,7 +531,7 @@ var RumiyoAvatar = (function () {
   function emoClip(e) { return e === "angry" ? "angry" : e === "cry" ? "cry" : e === "happy" ? "happy" : "speak"; }
   // jonli rejimda hissiyat Rumiyo aytgan matndan aniqlanadi
   function moodFrom(t) {
-    if (/\b(h[ie]h|hi-?hi|ha-?ha|haha|ahaha|xa-?xa|xaxa)\b|kul(di|ma|ib|aman)/i.test(t)) return "laugh";
+    if (/\b(h[ie]h|hi-?hi|ha-?ha|haha|ahaha|xa-?xa|xaxa|a+h{2,})\b|kul(di|ma|ib|aman)/i.test(t)) return "laugh";
     if (/yig['\u2018\u2019`]?l(a|ab|ay)|voy onam|achinar/i.test(t)) return "cry";
     if (/barakalla|molodets|ofarin|to['\u2018\u2019`]?g['\u2018\u2019`]?ri aytding|yaxshi bo['\u2018\u2019`]?ldi|qoyil/i.test(t)) return "happy";
     if (soft()) return "speak";

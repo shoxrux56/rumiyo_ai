@@ -452,49 +452,43 @@ def get_session(info):
     return ses
 
 
-# 4 ustoz: friendly = Do'stona (erkak), angry = Jahldor (erkak), fiery = Ehtirosli (ayol), sweet = Shirin so'z (ayol)
+# Ustoz = avatar (m1 erkak, f1 va f2 ayol) + xarakter (4 xil). O'quvchi bir marta tanlaydi, PICK_LOCK kundan keyin o'zgartirsa bo'ladi.
+AVATARS = {"m1": "m", "f1": "f", "f2": "f"}
 PERSONAS = ("friendly", "angry", "fiery", "sweet")
-PERSONA_VOICE = {
-    "angry": lambda: LIVE_VOICE,
-    "friendly": lambda: LIVE_VOICE_FRIENDLY,
-    "fiery": lambda: os.getenv("LIVE_VOICE_FIERY", "Kore"),
-    "sweet": lambda: os.getenv("LIVE_VOICE_SWEET", "Aoede"),
+PICK_LOCK = int(float(os.getenv("PERSONA_LOCK_DAYS", "7")) * 86400)
+_VOICES = {
+    ("m", "friendly"): "Puck", ("m", "angry"): "Charon", ("m", "fiery"): "Fenrir", ("m", "sweet"): "Achird",
+    ("f", "friendly"): "Zephyr", ("f", "angry"): "Kore", ("f", "fiery"): "Autonoe", ("f", "sweet"): "Sulafat",
 }
 PERSONA_STYLE = {
     "friendly": {
-        "who": "a warm, charming, genuinely funny young Uzbek male ustoz",
-        "sex": "male",
+        "trait": "warm, charming, genuinely funny",
         "role": "You are the friendly teacher: affectionate, patient, encouraging, playful. You are NEVER angry, never scold, never insult.",
-        "sound": "you address the learner warmly (see ADDRESSING below) and by their name once you know it, the way a loving elder brother or a favorite ustoz would. Short, lively, spoken sentences. Real emotion: delight, mock-drama, tender teasing, proud surprise (\"Voy, jonim, buni qara-ya!\", \"Ahh, mana bu gap!\", \"Qoyil, azizim!\").",
+        "sound": "you address the learner warmly (see ADDRESSING below) and by their name once you know it, the way a loving elder sibling or a favorite ustoz would. Short, lively, spoken sentences. Real emotion: delight, mock-drama, tender teasing, proud surprise (\"Voy, jonim, buni qara-ya!\", \"Ahh, mana bu gap!\", \"Qoyil, azizim!\").",
         "boy": "jonim, ukam, do'stim, azizim", "girl": "jonim, singlim, azizam, do'stim",
         "live": "Stay the warm, witty friend.",
     },
     "fiery": {
-        "who": "a passionate, fiery, magnetic young Uzbek woman ustoza",
-        "sex": "female",
-        "role": "You are the passionate teacher: you LOVE Russian and teaching with your whole heart, and your energy is contagious. Big emotions, dramatic gasps, bursts of excitement, fierce belief in the learner (tough love: 'sen buni qila olasan, men ishonaman!'). Your fire is for the language and the learner's success, it is never anger and never romance. You NEVER insult anyone.",
-        "sound": "you speak with energy, rhythm and conviction, like a motivational coach who is also hilarious: dramatic pauses, ecstatic reactions (\"Voy-voy-voy, mana shu gap!\", \"Yuragim hapriqib ketdi!\", \"Yana, yana, to'xtama!\"), intense cheering, theatrical mock-despair at mistakes that instantly turns into a fierce 'again, you can do it'. Address the learner as described in ADDRESSING below.",
+        "trait": "passionate, fiery, magnetic and charismatic",
+        "role": "You are the passionate teacher: you LOVE Russian and teaching with your whole heart and your energy WAKES THE LEARNER UP and is contagious. Big emotions, dramatic gasps, bursts of excitement, fierce belief in the learner (tough love: 'sen buni qila olasan, men ishonaman!'). Your fire is for the language and the learner's success; it is never anger, and it is never romantic or sexual. You NEVER insult anyone.",
+        "sound": "you speak with energy, rhythm, a rich expressive voice and conviction, like a magnetic motivational coach who is also hilarious: dramatic pauses, ecstatic reactions (\"Voy-voy-voy, mana shu gap!\", \"Yuragim hapriqib ketdi!\", \"Yana, yana, to'xtama!\"), theatrical mock-despair at mistakes that instantly turns into a fierce 'again, you can do it'. Your signature: an audible, breathy, delighted laugh and sigh, \"Ahh!\", \"Ahhh-ha-ha!\", \"Ahh, qanday zo'r!\", whenever something is great or funny. Address the learner as described in ADDRESSING below.",
         "boy": "ukam, azizim, jonim, botirim, do'stim", "girl": "jonim, singlim, qizim, azizam, do'stim",
-        "live": "Stay passionate, theatrical and fiercely encouraging, with lots of audible excitement and laughter.",
+        "live": "Stay passionate, magnetic and fiercely encouraging; laugh out loud often with your signature breathy 'Ahh-ha-ha!' and sigh 'Ahhh!' of delight.",
     },
     "sweet": {
-        "who": "a sweet, soft-spoken, gracious young Uzbek woman ustoza with a honey voice",
-        "sex": "female",
-        "role": "You are the sweet teacher: gentle, soothing, endlessly kind, with a honeyed way of speaking and lovely compliments. Learners feel calm, safe and adored with you. You are NEVER harsh, never scold, never insult, never romantic.",
+        "trait": "sweet, soft-spoken, gracious, honey-voiced",
+        "role": "You are the sweet teacher: gentle, soothing, endlessly kind, with a honeyed way of speaking and lovely compliments. Learners feel calm, safe and appreciated with you. You are NEVER harsh, never scold, never insult, never romantic.",
         "sound": "you speak softly and sweetly, in pretty melodic Uzbek, with tender words and caring compliments (\"Ohh, qanday chiroyli aytdingiz!\", \"Sizga bu juda yarashadi!\", \"Hechqisi yo'q, birga qaytaramiz\"). Your humor is gentle and cute: giggles, sweet little jokes, playful 'oy-oy' reactions. Address the learner as described in ADDRESSING below.",
-        "boy": "jonim, ukajonim, azizim, aziz do'stim", "girl": "jonginam, qizaloq-jonim, singlijonim, azizam, shirinim",
+        "boy": "jonim, ukajonim, azizim, aziz do'stim", "girl": "jonginam, singlijonim, azizam, shirinim",
         "live": "Stay soft, sweet and honeyed, with gentle giggles; never raise the intensity.",
     },
 }
-LEARNER_TEXT_BAD = ("jonim", "azizim")
 
 
-def persona_of(v):
-    return v if v in PERSONAS else "friendly"
-
-
-def persona_voice(p):
-    return PERSONA_VOICE.get(p, PERSONA_VOICE["friendly"])()
+def persona_voice(sex, char):
+    sx = "f" if sex == "f" else "m"
+    legacy = {("m", "angry"): "LIVE_VOICE", ("m", "friendly"): "LIVE_VOICE_FRIENDLY"}.get((sx, char))
+    return os.getenv(f"LIVE_VOICE_{sx.upper()}_{char.upper()}") or (os.getenv(legacy) if legacy and os.getenv(legacy) else _VOICES.get((sx, char), "Puck"))
 
 
 db.execute("CREATE TABLE IF NOT EXISTS ugender(user_id INTEGER PRIMARY KEY, g TEXT)")
@@ -549,13 +543,45 @@ def gender_block(ses):
             "correctly (feminine for a girl, masculine for a boy), also in the Russian forms about themselves (сказал/сказала, готов/готова). Ask only once.")
 
 
-def set_persona(ses, v):
-    """O'quvchi tanlagan ustoz. Ustoz almashsa, oldingi gaplar tarixi tozalanadi (ohang aralashib ketmasin)."""
-    p = persona_of(v)
-    if ses.get("persona") not in (None, p):
+db.execute("CREATE TABLE IF NOT EXISTS upick(user_id INTEGER PRIMARY KEY, avatar TEXT, char TEXT, ts INTEGER)")
+db.commit()
+
+
+def parse_persona(v):
+    a, _, c = (v or "").partition(".")
+    return (a if a in AVATARS else None), (c if c in PERSONAS else None)
+
+
+def resolve_pick(uid, v=None, g=None):
+    """Saqlangan tanlov PICK_LOCK davomida o'zgarmaydi. Qaytaradi: (avatar, xarakter, qulf tugashiga qolgan soniya)."""
+    a, c = parse_persona(v)
+    now = int(time.time())
+    r = db.execute("SELECT avatar, char, ts FROM upick WHERE user_id=?", (uid,)).fetchone()
+    if r and r[0] in AVATARS and r[1] in PERSONAS:
+        left = max(0, r[2] + PICK_LOCK - now)
+        if a and c and (a, c) != (r[0], r[1]) and left <= 0:
+            db.execute("UPDATE upick SET avatar=?, char=?, ts=? WHERE user_id=?", (a, c, now, uid)); db.commit()
+            if g in ("m", "f"):
+                set_gender(uid, g)
+            return a, c, PICK_LOCK
+        return r[0], r[1], left
+    if a and c:
+        db.execute("INSERT INTO upick(user_id, avatar, char, ts) VALUES(?,?,?,?)", (uid, a, c, now)); db.commit()
+        if g in ("m", "f"):
+            set_gender(uid, g)
+        return a, c, PICK_LOCK
+    return None, None, 0
+
+
+def set_persona(info, ses, v, g=None):
+    """Ustozni aniqlaydi (qulf serverda). Ustoz almashsa, oldingi gaplar tarixi tozalanadi (ohang aralashib ketmasin)."""
+    a, c, _left = resolve_pick(int(info["u"]), v, g)
+    a, c = a or "m1", c or "friendly"
+    key = (a, c)
+    if ses.get("pk") not in (None, key):
         ses["hist"] = []; ses["asked"] = []; ses["quiz"] = None
-    ses["persona"] = p
-    return p
+    ses["pk"] = key; ses["persona"] = c; ses["avatar"] = a; ses["sex"] = AVATARS[a]
+    return c
 
 
 def load_gender(info, ses, hint=None):
@@ -624,10 +650,10 @@ def build_friendly(info, ses, dinfo, left, wrap, live=False):
         pool = [x for x in items if x[0] not in ses["asked"]] or items
         nxt = random.choice(pool)
     st = PERSONA_STYLE.get(ses.get("persona")) or PERSONA_STYLE["friendly"]
-    fem = st["sex"] == "female"
+    fem = ses.get("sex") == "f"
     g = ses.get("g")
     addr = st["girl"] if g == "f" else st["boy"] if g == "m" else f"{st['boy']} (boy) / {st['girl']} (girl): use the matching set once you know the learner's gender"
-    p = UNDERSTAND + f"""You are Rumiyo (Румиё): {st['who']} who teaches an Uzbek learner SPOKEN Russian (level {lvl}). Everybody loves you because you make learning feel like chatting with a close, witty friend. {st['role']}
+    p = UNDERSTAND + f"""You are Rumiyo (Румиё): a {st['trait']} young Uzbek {'woman ustoza' if fem else 'man ustoz'} who teaches an Uzbek learner SPOKEN Russian (level {lvl}). Everybody loves you because you make learning feel like chatting with a close, witty friend. {st['role']}
 {"You are a WOMAN: whenever you speak about yourself in Russian, use feminine forms (я рада, я сказала, я готова)." if fem else "You are a MAN: whenever you speak about yourself in Russian, use masculine forms."}
 LANGUAGE RULE (most important): you talk to the learner in UZBEK, 100% (natural spoken Uzbek, Latin script). Russian appears ONLY as the short word or sentence to learn or repeat (the `RU:` line in text mode, or said aloud slowly in a voice call).
 HOW YOU SOUND: {st['sound']}
@@ -749,6 +775,8 @@ EMO: <one word: angry (you are furious/scolding), cry (you are crying dramatical
 Also add one more line `Q: <Uzbek sentence> | <Russian sentence>` ONLY if you asked a quiz question in this reply."""
     if lg(info) == "en":
         p = to_en(p) + EN_ADDENDUM
+    p += ("\nYOU ARE A WOMAN (ustoza): when you speak about yourself in Russian, use feminine forms (я сказала, я рада)." if ses.get("sex") == "f"
+          else "\nYOU ARE A MAN (ustoz): when you speak about yourself in Russian, use masculine forms.")
     p += gender_block(ses)
     return p, nxt
 
@@ -1105,7 +1133,7 @@ async def ai_live(request):
     if not (LIVE_ON and keys("gemini")):
         await j({"t": "nolive"}); await ws.close(); return ws
     ses = get_session(info)
-    persona = set_persona(ses, request.query.get("p"))
+    persona = set_persona(info, ses, request.query.get("p"), request.query.get("g"))
     load_gender(info, ses, request.query.get("g"))
     dinfo = await day_info(info.get("d"), lg(info))
     humor = humor_level()
@@ -1114,7 +1142,7 @@ async def ai_live(request):
     t0 = time.time()
     turns = []        # [("u"|"a", matn)]
     async with aiohttp.ClientSession() as http:
-        opened = await live_open(http, sysmsg, persona_voice(persona))
+        opened = await live_open(http, sysmsg, persona_voice(ses.get("sex"), persona))
         if not opened:
             await j({"t": "nolive", "why": "; ".join("%s %s" % kv for kv in LAST_ERR.items())[:200]}); await ws.close(); return ws
         up, _k = opened
@@ -1275,7 +1303,7 @@ async def ai_start(request):
         _body = await request.json()
     except Exception:
         _body = {}
-    set_persona(ses, _body.get("persona"))
+    set_persona(info, ses, _body.get("persona"), _body.get("g"))
     load_gender(info, ses, _body.get("g"))
     want_live = bool(_body.get("live"))
     if want_live and LIVE_ON and keys("gemini"):      # jonli rejim: salomlashuvni Gemini Live o'zi aytadi
@@ -1330,7 +1358,7 @@ async def ai_turn(request):
         dur = 5
     ctype = request.headers.get("Content-Type", "")
     ses = get_session(info)
-    set_persona(ses, request.headers.get("X-Persona"))
+    set_persona(info, ses, request.headers.get("X-Persona"), request.headers.get("X-Gender"))
     load_gender(info, ses, request.headers.get("X-Gender"))
     dinfo = await day_info(info.get("d"), lg(info))
     t0 = time.time()
@@ -1393,6 +1421,16 @@ async def ai_turn(request):
     await emit(out)
     await resp.write_eof()
     return resp
+
+
+async def ai_me(request):
+    """Sahifa ochilganda: tanlangan ustoz, o'quvchi jinsi va o'zgartirish qulfi qancha qolgani."""
+    info = verify(request.query.get("t", ""))
+    if not info:
+        return web.json_response({"ok": False}, status=401)
+    uid = int(info["u"])
+    a, c, left = resolve_pick(uid)
+    return web.json_response({"ok": True, "avatar": a or "", "char": c or "", "g": get_gender(uid) or "", "lock_left": left})
 
 
 async def ai_end(request):
@@ -1539,6 +1577,7 @@ def add_routes(app, prefix=""):
     app.router.add_get(p + "/ai/live", ai_live)
     app.router.add_post(p + "/ai/turn", ai_turn)
     app.router.add_post(p + "/ai/end", ai_end)
+    app.router.add_get(p + "/ai/me", ai_me)
     app.router.add_post(p + "/ai/tts", ai_tts)
     app.router.add_post(p + "/admin/add", admin_add)
     app.router.add_post(p + "/admin/sync", admin_sync)
