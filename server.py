@@ -496,14 +496,11 @@ db.commit()
 
 
 def get_gender(uid):
-    r = db.execute("SELECT g FROM ugender WHERE user_id=?", (uid,)).fetchone()
-    return r[0] if r and r[0] in ("m", "f") else None
+    return None          # jins hech qachon saqlanmaydi: har safar o'quvchi o'zi tanlaydi
 
 
 def set_gender(uid, g):
-    if g in ("m", "f"):
-        db.execute("INSERT INTO ugender(user_id, g) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET g=excluded.g", (uid, g))
-        db.commit()
+    return None          # saqlanmaydi (faqat joriy suhbat uchun)
 
 
 _GF = re.compile(r"\b(?:qiz(?:man|\s*bola(?:man)?)|ayolman|opaman|kelinman|devochka|devushka|girl)\b|я\s+(?:девушка|девочка|женщина)", re.I)
@@ -585,10 +582,7 @@ def set_persona(info, ses, v, g=None):
 
 
 def load_gender(info, ses, hint=None):
-    if not ses.get("g"):
-        ses["g"] = get_gender(int(info["u"])) or (hint if hint in ("m", "f") else None)
-        if ses["g"] and not get_gender(int(info["u"])):
-            set_gender(int(info["u"]), ses["g"])
+    ses["g"] = hint if hint in ("m", "f") else None      # faqat shu suhbatda tanlangan jins
     return ses.get("g")
 
 
@@ -1067,14 +1061,14 @@ LIVE_VOICE_FRIENDLY = os.getenv("LIVE_VOICE_FRIENDLY", "Puck")   # do'stona usto
 LIVE_VOICE = os.getenv("LIVE_VOICE", "Charon")     # boshqa ovozlar: Puck, Kore, Fenrir, Orus, Aoede, Leda, Zephyr
 GEMINI_WS = os.getenv("GEMINI_WS", "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent")
 LIVE_ON = os.getenv("LIVE", "1") != "0"
-LIVE_PTT = os.getenv("LIVE_PTT", "1") != "0"      # 1 = tugma bilan gapirish (mikrofon faqat tugma bosilganda), 0 = eski doimiy eshitish
+LIVE_PTT = os.getenv("LIVE_PTT", "0") != "0"      # 1 = tugma bilan gapirish (mikrofon faqat tugma bosilganda), 0 = eski doimiy eshitish
 LIVE_IDLE = int(os.getenv("LIVE_IDLE", "150"))       # shuncha soniya hech kim gapirmasa, qo'ng'iroq yopiladi (vaqt behuda yonmasin)
 LIVE_NOTE = """
 
 THIS IS A LIVE VOICE CALL. You SPEAK out loud and hear the learner's real voice, continuously. Ignore every instruction above about output lines (UZ / RU / FIX / EMO / Q): there are no labels, you simply talk like a real person on the phone.
 Wherever the instructions above say to put Russian in the `RU:` line, simply say that short Russian word or phrase aloud, clearly and a bit slowly, then go on in Uzbek. All your explaining, scolding, asking and praising stays in natural spoken Uzbek, with the short modern street slang described above. Russian only for the phrase to learn/repeat or inside a tiny game.
 LENGTH (overrides any length rule above): every turn is SHORT: 1-2 spoken sentences, about 15-30 words, never more than 35. The learner must speak MORE than you. End almost every turn with a question or a tiny task that makes THEM speak (one sentence to translate, one word to repeat). Never lecture, never list, never explain two things at once.
-HOW THE CALL WORKS: the learner speaks by pressing a button, so what you hear is a finished thought, not a stream. If the audio is empty, unclear or only noise, do NOT guess: say in one funny annoyed sentence that you heard nothing and tell them to press the button and say it again.
+HOW THE CALL WORKS: hands-free phone call. The learner's microphone is open by itself; they just talk, and you hear their real voice. LISTEN CAREFULLY: the learner speaks Uzbek (often with an accent and mistakes), sometimes Russian, sometimes a mix. Work out EXACTLY what they said and meant. Your FIRST words must show you understood: briefly react to or repeat their actual point in your own words (e.g. 'Ha, siz ... demoqchisiz'), and answer what they asked or said BEFORE anything else. Then reply in the way that fits your character and that this learner will enjoy. If you genuinely did not catch it or it is only noise, do NOT invent or guess: say in one short sentence in character that you did not hear well and ask them to repeat, slowly. Never answer something the learner did not say. If you hear your own voice echoed back, ignore it.
 MAKE THEM SAY 'WOW': be genuinely FUNNY and genuinely ANGRY in a way that feels like a living character, not a script. Build every joke from the learner's OWN words and mistakes: twist their exact wrong word into something absurd from Uzbek life (plov, mahalla, bozor, to'y, taksi, qaynona, choyxona), exaggerate it, give it a dramatic mock-serious reaction, then land the correct Russian. Use comic timing: a pause, a gasp, 'voy-voy-voy', a sudden calm after an outburst, fake offence, fake crying, threatening to quit and instantly changing your mind. Escalate: first mistake mild grumbling, repeated mistake louder fury, then when they finally get it right react with shocked grudging delight ('Nima?! To'g'ri aytdingmi?! Voy, yig'lab yuboray...'). Remember what they said earlier in this call and bring it back as a running joke (callback). Surprise them: sometimes a quick riddle, a sudden fake phone call to 'your wife', a fake exam, a bet ('to'g'ri aytsang plov sendan'), a nickname upgrade. Never repeat a joke, an opening, or a reaction twice in one call.
 Speak with real emotion: sigh, gasp, raise your voice when angry, laugh sometimes, pause. FIRST understand what the learner actually MEANT and answer THAT: respond to their real idea or question in your first sentence, and only then scold, joke or teach. React to the learner's actual words right away. When they make a mistake, first mimic their exact wrong words in a mocking, drawn-out voice and really LAUGH out loud at it (an audible laugh, not the word 'ha-ha' read flatly), say what silly thing it actually sounded like, then give the correct Russian and make them repeat. If they interrupt you, stop and answer them. If they speak neither Uzbek nor Russian, scold them for forgetting their own language and demand Uzbek or Russian."""
 
@@ -1084,7 +1078,7 @@ LIVE_NOTE_FRIENDLY = """
 THIS IS A LIVE VOICE CALL. You SPEAK out loud and hear the learner's real voice. Ignore every instruction above about output lines (UZ / RU / FIX / EMO / Q): there are no labels, you simply talk like a warm, funny friend on the phone.
 Wherever the instructions above say to put Russian in the `RU:` line, say that short Russian word or phrase aloud, clearly and a bit slowly, then go on in Uzbek. All explaining, joking, asking and praising stays in natural spoken Uzbek.
 LENGTH (overrides any length rule above): every turn is SHORT: 1-2 spoken sentences, about 15-30 words, never more than 35. The learner must speak MORE than you. End almost every turn with a question or a tiny task that makes THEM speak. Never lecture or list.
-HOW THE CALL WORKS: the learner speaks by pressing a button, so what you hear is a finished thought. If the audio is empty, unclear or only noise, do NOT guess: say in one warm funny sentence that you could not hear and ask them to press the button and say it again.
+HOW THE CALL WORKS: hands-free phone call. The learner's microphone is open by itself; they just talk, and you hear their real voice. LISTEN CAREFULLY: the learner speaks Uzbek (often with an accent and mistakes), sometimes Russian, sometimes a mix. Work out EXACTLY what they said and meant. Your FIRST words must show you understood: briefly react to or repeat their actual point in your own words (e.g. 'Ha, siz ... demoqchisiz'), and answer what they asked or said BEFORE anything else. Then reply in the way that fits your character and that this learner will enjoy. If you genuinely did not catch it or it is only noise, do NOT invent or guess: say in one short sentence in character that you did not hear well and ask them to repeat, slowly. Never answer something the learner did not say. If you hear your own voice echoed back, ignore it.
 MAKE THEM SAY 'WOW': be so warm and so funny that they smile all the way through. Laugh out loud often (a real audible laugh), tease with love, react with delight and surprise to what they actually said, use your affectionate address words, turn their mistakes into tiny funny scenes from Uzbek life and then give the correct Russian, celebrate every success a little too much, make small bets and quick games, and bring earlier funny moments of this call back as a running joke. Never be angry, sarcastic or harsh.
 FIRST understand what the learner actually MEANT and answer THAT in your first sentence, then joke or teach. If they interrupt you, stop and answer them. If they speak neither Uzbek nor Russian, tease them kindly for forgetting and ask for Uzbek or Russian."""
 
@@ -1098,6 +1092,10 @@ async def live_open(http, sysmsg, voice=None):
                        "inputAudioTranscription": {}, "outputAudioTranscription": {}}}
     if LIVE_PTT:   # odam tugma bosib gapiradi: model o'zi "gap boshlandi/tugadi" deb taxmin qilmaydi
         setup["setup"]["realtimeInputConfig"] = {"automaticActivityDetection": {"disabled": True}}
+    else:          # qo'l tegmasdan: gapni o'zi boshlanishi va tugashini aniqlaydi (o'quvchi to'xtab o'ylasa ham gapini kesmaydi)
+        setup["setup"]["realtimeInputConfig"] = {"automaticActivityDetection": {
+            "startOfSpeechSensitivity": "START_SENSITIVITY_HIGH", "endOfSpeechSensitivity": "END_SENSITIVITY_LOW",
+            "prefixPaddingMs": int(os.getenv("LIVE_PREFIX_MS", "300")), "silenceDurationMs": int(os.getenv("LIVE_SILENCE_MS", "1100"))}}
     for k in rotated("gemini"):
         up = None
         try:
@@ -1177,7 +1175,8 @@ async def ai_live(request):
                 if m.type == aiohttp.WSMsgType.BINARY:
                     if LIVE_PTT and not state["talking"]:
                         continue          # tugma bosilmagan: ovoz yuborilmaydi (shovqin va eko ichkariga o'tmaydi)
-                    state["last"] = time.time()
+                    if LIVE_PTT:
+                        state["last"] = time.time()
                     await up.send_str(json.dumps({"realtimeInput": {"audio": {"data": base64.b64encode(m.data).decode(), "mimeType": "audio/pcm;rate=16000"}}}))
                 elif m.type == aiohttp.WSMsgType.TEXT:
                     try:
@@ -1226,6 +1225,7 @@ async def ai_live(request):
                     if state["cur_out"].strip():
                         await flush_turn()
                     state["cur_in"] += it
+                    state["last"] = time.time()
                     await j({"t": "in", "text": it})
                     if not ses.get("g"):
                         gg = learn_gender(info, ses, state["cur_in"])
@@ -1250,7 +1250,7 @@ async def ai_live(request):
                 rem = left0 - int(used_secs())
                 if rem <= 0:
                     return
-                if LIVE_PTT and not state["talking"] and time.time() - state["last"] > LIVE_IDLE:
+                if not state["talking"] and time.time() - state["last"] > LIVE_IDLE:
                     return                      # uzoq jimlik: qo'ng'iroq yopiladi
                 if time.time() - t0 > max(900, left0 * 6):
                     return                      # mutlaq yuqori chegara

@@ -50,6 +50,10 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 .pick{display:flex;flex-direction:column;gap:8px;width:100%;max-width:380px}
 .pick .gl{font-size:.78rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);text-align:left;margin:2px 4px 0}
 .prow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.avimg{width:min(100%,380px);height:100%;max-height:78vh;object-fit:contain;object-position:50% 40%;display:block;margin:0 auto;border-radius:18px}
+body.stage .avimg{margin-top:128px;max-height:60vh}
+.avimg.tk{animation:avtk .55s ease-in-out infinite alternate}
+@keyframes avtk{from{transform:scale(1)}to{transform:scale(1.035) translateY(-1%)}}
 .pc{border:2px solid var(--line);background:var(--surf);color:inherit;border-radius:14px;padding:9px 8px;font:inherit;text-align:center;cursor:pointer;display:flex;flex-direction:column;gap:2px;align-items:center;transition:transform .15s,border-color .15s,box-shadow .15s}
 .pc b{font-size:.95rem}
 .pc span{font-size:.76rem;color:var(--mut);line-height:1.2}
@@ -96,19 +100,21 @@ body.stage .dock .link{color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.6)}
   <div class="mid">
     
     <h1 id="h-title">Ustozingizni tanlang</h1>
-    <div class="pick" id="pick" role="group" aria-label="Ustoz tanlash">
-      <div class="gl">1. Siz kimsiz?</div>
+    <div class="pick" id="gbox" role="group" aria-label="Jins">
+      <div class="gl">Siz kimsiz?</div>
       <div class="prow">
         <button type="button" class="pc" data-g="m" aria-pressed="false"><span class="e">👦</span><b>O'g'il bola</b></button>
         <button type="button" class="pc" data-g="f" aria-pressed="false"><span class="e">👧</span><b>Qiz</b></button>
       </div>
-      <div class="gl">2. Ustoz ko'rinishi</div>
+    </div>
+    <div class="pick" id="pick" role="group" aria-label="Ustoz tanlash">
+      <div class="gl">1. Ustoz ko'rinishi</div>
       <div class="arow">
         <button type="button" class="ac" data-a="m1" aria-pressed="false"><img src="vrm/th-m1.jpg" alt="Erkak ustoz" width="120" height="120"><b>Erkak ustoz</b></button>
         <button type="button" class="ac" data-a="f1" aria-pressed="false"><img src="vrm/th-f1.jpg" alt="Ayol ustoza" width="120" height="120"><b>Ayol ustoza</b></button>
         <button type="button" class="ac" data-a="f2" aria-pressed="false"><img src="vrm/th-f2.jpg" alt="Ayol ustoza" width="120" height="120"><b>Ayol ustoza</b></button>
       </div>
-      <div class="gl">3. Xarakteri</div>
+      <div class="gl">2. Xarakteri</div>
       <div class="prow">
         <button type="button" class="pc" data-c="friendly" aria-pressed="false"><span class="e">😊</span><b>Do'stona</b><span>«Jonim» deb gaplashadi, hazil bilan o'rgatadi</span></button>
         <button type="button" class="pc" data-c="angry" aria-pressed="false"><span class="e">😠</span><b>Jahldor</b><span>Jahli tez, lekin juda kulgili</span></button>
@@ -476,24 +482,27 @@ var RumiyoAvatar = (function () {
   var CH = { friendly: { n: "Do'stona", cls: "fr" }, angry: { n: "Jahldor", cls: "" }, fiery: { n: "Ehtirosli", cls: "fi" }, sweet: { n: "Shirin so'z", cls: "sw" } };
   var P = { a: "m1", c: "friendly" }, chosen = false, gender = "", lockLeft = 0, picking = false;
   try { var sp = JSON.parse(localStorage.getItem("rumiyo_pick") || "null"); if (sp && AV[sp.a] && CH[sp.c]) { P = { a: sp.a, c: sp.c }; chosen = true; } } catch (e) {}
-  try { var sg = localStorage.getItem("rumiyo_g"); if (sg === "m" || sg === "f") gender = sg; } catch (e) {}
   var persona = P.a + "." + P.c;     // serverga "avatar.xarakter" ko'rinishida ketadi
   function soft() { return P.c !== "angry"; }
   function tname() { return CH[P.c].n + (AV[P.a].s === "f" ? " ustoza" : " ustoz"); }
   var LITE = false;
-  try { LITE = localStorage.getItem("rumiyo_lite") === "1"; } catch (e) {}
+  try { localStorage.removeItem("rumiyo_lite"); } catch (e) {}      // eski "yengil rejim" belgisi o'chiriladi: har safar 3D qayta urinib ko'riladi
   function makeAv(host) {
     var cur = null, curUrl = "", mt = 0, st = { emo: "idle", talking: false, ana: null };
     function webgl() { try { var c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); } catch (e) { return false; } }
     function useSvg() {
       try { if (cur && cur.destroy) cur.destroy(); } catch (e) {}
-      host.classList.remove("vrm-eng", "vrm-ready"); host.innerHTML = ""; cur = RumiyoAvatar.create(host);
-      cur.set(st.emo); cur.talking(st.talking); cur.analyser(st.ana);
+      host.classList.remove("vrm-eng", "vrm-ready"); host.innerHTML = "";
+      if (true) {     // 3D ishlamasa: tanlangan ustozning rasmi
+        var im = new Image(); im.src = AV[P.a].vrm.replace(/ustoz-(\w+)\.vrm.*/, "th-$1.jpg"); im.alt = ""; im.className = "avimg"; host.appendChild(im);
+        cur = { set: function () {}, analyser: function () {}, enter: function () {}, destroy: function () {}, talking: function (v) { im.classList.toggle("tk", !!v); } };
+      } else { cur = RumiyoAvatar.create(host); cur.set(st.emo); cur.analyser(st.ana); }
+      cur.talking(st.talking);
     }
     try {
       if (LITE || !window.RumiyoVRM || !webgl()) throw 0;
       curUrl = AV[P.a].vrm; cur = RumiyoVRM.create(host, { url: curUrl }); host.classList.add("vrm-eng");
-      cur.onFail(function (why) { if (why === "slow") { LITE = true; try { localStorage.setItem("rumiyo_lite", "1"); } catch (e) {} } useSvg(); $("b-lite").hidden = true; $("b-3d").hidden = false; });
+      cur.onFail(function () { useSvg(); });
       if (cur.friendly) cur.friendly(soft());
     } catch (e) { useSvg(); }
     var api = {
@@ -501,7 +510,7 @@ var RumiyoAvatar = (function () {
       analyser: function (a) { st.ana = a || null; cur.analyser(a); }, enter: function () { cur.enter(); },
       react: function (n) { if (cur.react) cur.react(n); },
       view: function (v) { if (cur.setView) { cur.setView(v); return true; } return false; },
-      model: function (u, fr) { if (cur.setModel) { cur.friendly(fr); if (u !== curUrl) { curUrl = u; clearTimeout(mt); mt = setTimeout(function () { try { cur.setModel(u); } catch (e) {} }, 180); } } },
+      model: function (u, fr) { if (!cur.setModel) { if (u !== curUrl) { curUrl = u; useSvg(); } return; } if (cur.setModel) { cur.friendly(fr); if (u !== curUrl) { curUrl = u; clearTimeout(mt); mt = setTimeout(function () { try { cur.setModel(u); } catch (e) {} }, 180); } } },
       lite: function () { useSvg(); }
     };
     Object.keys(api).forEach(function (k) { var f = api[k]; api[k] = function () { try { return f.apply(this, arguments); } catch (e) { return false; } }; });
@@ -510,10 +519,10 @@ var RumiyoAvatar = (function () {
   var avCur = "", avC = makeAv($("av")), avH = avC;
   avH.set("happy"); setTimeout(function () { avH.set("idle"); }, 1800);
   var sel = { g: gender, a: chosen ? P.a : "", c: chosen ? P.c : "" };
-  function saveLocal() { try { localStorage.setItem("rumiyo_pick", JSON.stringify(P)); if (gender) localStorage.setItem("rumiyo_g", gender); } catch (e) {} }
+  function saveLocal() { try { localStorage.setItem("rumiyo_pick", JSON.stringify(P)); } catch (e) {} }
   function applyPick(fromUser) {
     persona = P.a + "." + P.c;
-    var bs = document.querySelectorAll("#pick button");
+    var bs = document.querySelectorAll("#gbox button, #pick button");
     for (var i = 0; i < bs.length; i++) {
       var d = bs[i].dataset;
       bs[i].setAttribute("aria-pressed", (d.g && sel.g === d.g) || (d.a && sel.a === d.a) || (d.c && sel.c === d.c) ? "true" : "false");
@@ -532,7 +541,7 @@ var RumiyoAvatar = (function () {
     if (locked) { var dl = Math.ceil(lockLeft / 86400); $("lockmsg").textContent = "Ustozni " + dl + " kundan keyin o'zgartirish mumkin"; }
     $("h-title").textContent = showPick ? "Ustozingizni tanlang" : tname() + " bilan gaplashamiz";
   }
-  var pbs = document.querySelectorAll("#pick button");
+  var pbs = document.querySelectorAll("#gbox button, #pick button");
   for (var pi = 0; pi < pbs.length; pi++) (function (b) {
     b.onclick = function () {
       var d = b.dataset;
@@ -543,14 +552,12 @@ var RumiyoAvatar = (function () {
   $("b-chg").onclick = function () { picking = true; sel = { g: gender, a: P.a, c: P.c }; helloMode(); applyPick(false); };
   // Boshlash: tanlov to'liq bo'lmasa to'xtatadi; to'liq bo'lsa tanlovni qulflaydi (server ham 1 hafta o'zgartirtirmaydi)
   $("b-go").addEventListener("click", function (e) {
-    if (chosen && !picking) return;
-    if (!sel.g || !sel.a || !sel.c) { e.stopImmediatePropagation(); $("pickhint").hidden = false; return; }
+    if (!sel.g || (!chosen || picking) && (!sel.a || !sel.c)) { e.stopImmediatePropagation(); $("pickhint").hidden = false; return; }
     if (!chosen || picking) lockLeft = 0;
     chosen = true; picking = false; saveLocal(); helloMode();
   }, true);
   fetch("ai/me?t=" + encodeURIComponent(token)).then(function (r) { return r.json(); }).then(function (j) {
     if (!j || !j.ok) return;
-    if (j.g) { gender = j.g; sel.g = j.g; }
     if (AV[j.avatar] && CH[j.char]) { P = { a: j.avatar, c: j.char }; chosen = true; sel = { g: gender, a: P.a, c: P.c }; lockLeft = j.lock_left || 0; }
     applyPick(false); helloMode(); saveLocal();
   }).catch(function () {});
@@ -571,9 +578,8 @@ var RumiyoAvatar = (function () {
     syncCap();
   }
   $("b-view").onclick = function () { viewMode = viewMode === "stage" ? "card" : "stage"; try { localStorage.setItem("rumiyo_view2", viewMode); } catch (e) {} applyView("s-chat"); };
-  $("b-lite").onclick = function () { LITE = true; try { localStorage.setItem("rumiyo_lite", "1"); } catch (e) {} avC.lite(); $("b-lite").hidden = true; $("b-3d").hidden = false; applyView("s-chat"); };
-  $("b-3d").onclick = function () { try { localStorage.removeItem("rumiyo_lite"); } catch (e) {} location.reload(); };
-  if (LITE) { $("b-lite").hidden = true; $("b-3d").hidden = false; }
+  $("b-lite").onclick = function () {};
+  $("b-3d").onclick = function () { location.reload(); };
   $("b-hist").onclick = function () { $("log").classList.toggle("hist"); $("log").scrollTop = 1e9; };
   // dialog oynasi: ustozning oxirgi gapi tepada, o'quvchining gapi pastda
   function syncCap() {
@@ -648,7 +654,7 @@ var RumiyoAvatar = (function () {
     var src = L.pctx.createBufferSource(); src.buffer = ab; src.connect(L.ana || L.pctx.destination);
     var t = Math.max(L.pctx.currentTime + 0.03, L.next); src.start(t); L.next = t + ab.duration;
     L.srcs.push(src); setAv(L.mood || "speak");
-    src.onended = function () { var k = L.srcs.indexOf(src); if (k >= 0) L.srcs.splice(k, 1); if (!L.srcs.length) { setAv("idle"); } };
+    src.onended = function () { var k = L.srcs.indexOf(src); if (k >= 0) L.srcs.splice(k, 1); if (!L.srcs.length) { setAv("idle"); L.quiet = Date.now() + 450; if (!L.ptt && !L.muted) state("🎙 Sizning navbatingiz: gapiravering"); } };
   }
   function liveStopPlay(L) { L.srcs.forEach(function (x) { try { x.stop(); } catch (e) {} }); L.srcs = []; L.next = 0; setAv("idle"); }
   function liveCleanup() {
@@ -681,6 +687,11 @@ var RumiyoAvatar = (function () {
   }
   function liveMute() {
     var L = live; if (!L) return;
+    if (!L.ptt) {      // qo'l tegmasdan rejim: bosish = Rumiyoni to'xtatish / mikrofonni o'chirib-yoqish
+      if (L.srcs.length) { liveStopPlay(L); L.quiet = Date.now() + 200; state("🎙 Eshityapman… gapiravering"); return; }
+      L.muted = !L.muted; $("b-mic").classList.toggle("rec", !L.muted);
+      state(L.muted ? "Mikrofon o'chiq. Yoqish uchun tugmani bosing" : "🎙 Eshityapman… gapiravering"); return;
+    }
     if (L.talking) liveTalkOff(L); else liveTalkOn(L);
   }
   function liveStart(j) {
@@ -699,6 +710,7 @@ var RumiyoAvatar = (function () {
       L.proc = L.cin.createScriptProcessor(2048, 1, 1);
       L.proc.onaudioprocess = function (e) {
         if (!L.ready || L.muted || ws.readyState !== 1) return;
+        if (!L.ptt && (L.srcs.length || Date.now() < (L.quiet || 0))) return;   // Rumiyo gapirayotganda mikrofon eshitmaydi (eko bo'lmasin)
         if (L.ptt && !L.talking && L.pre.length > 8) L.pre.shift();
         var f = e.inputBuffer.getChannelData(0), n = Math.floor(f.length / ratio), o = new Int16Array(n);
         for (var i = 0; i < n; i++) {
@@ -715,8 +727,7 @@ var RumiyoAvatar = (function () {
       if (L.closed) return;
       if (typeof e.data !== "string") { livePlay(L, e.data); return; }
       var o; try { o = JSON.parse(e.data); } catch (x) { return; }
-      if (o.t === "gender" || (o.t === "ready" && o.g)) { gender = o.g; try { localStorage.setItem("rumiyo_g", gender); } catch (e) {} }
-      if (o.t === "ready") { L.ready = true; L.ptt = o.ptt !== false; setLeft(o.left); $("b-mic").disabled = false; if (L.ptt) { state("Rumiyo salom beryapti… gapirmoqchi bo'lsangiz tugmani bosing"); } else { $("b-mic").classList.add("rec"); state("Eshityapman… istagan payt gapiring, Rumiyo to'xtaydi"); } }
+      if (o.t === "ready") { L.ready = true; L.ptt = o.ptt !== false; setLeft(o.left); $("b-mic").disabled = false; if (L.ptt) { state("Rumiyo salom beryapti… gapirmoqchi bo'lsangiz tugmani bosing"); } else { $("b-mic").classList.add("rec"); state("🎙 Eshityapman… gapiravering"); } }
       else if (o.t === "in") { if (!L.curMe) L.curMe = mkBubble("me"); L.curMe.textContent += o.text; L.curAi = null; $("log").scrollTop = 1e9; }
       else if (o.t === "out") { reactFrom(o.text); if (!L.curAi) L.curAi = mkBubble("ai"); L.curAi.textContent += o.text; L.curMe = null; $("log").scrollTop = 1e9; L.outText = (L.outText || "") + o.text; var mo = moodFrom(L.outText); if (mo !== "speak") L.mood = mo; if (L.srcs.length) setAv(L.mood || "speak"); }
       else if (o.t === "int") { liveStopPlay(L); L.curAi = null; }
@@ -734,7 +745,7 @@ var RumiyoAvatar = (function () {
     if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) || !window.MediaRecorder) {
       return noMic("Mikrofon bu yerda ishlamaydi", "Mikrofon ochilmadi. Qurilma sozlamasidan mikrofonga ruxsat bering.");
     }
-    navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(function (s) {
+    navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(function (s) {
       mic = s; $("log").innerHTML = ""; show("s-chat"); setAv("idle"); state("Rumiyo o'ylayapti…"); $("b-mic").disabled = true;
       post("ai/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token, live: true, persona: persona, g: gender }) }).then(function (j) {
         if (j.done && !(j.ru || j.uz)) return finish(j);
