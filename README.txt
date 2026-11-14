@@ -19,3 +19,9 @@ RUMIYO SAYTI — alohida Render servis
 
 Suhbat (odam bilan) hozircha o'chiq: bot "Suhbat" tugmasi Rumiyoni ochadi.
 Odam bilan suhbatni qaytarish uchun botga SUHBAT_ON=1 qo'shing.
+
+--- Tugma bilan gapirish (jonli rejim) ---
+LIVE_PTT=1 (standart): mikrofon faqat tugma bosilganda ochiladi. Tez bosish = yoqish/o'chirish, bosib turish = qo'yib yuborganda yuboriladi.
+LIVE_PTT=0: eski doimiy eshitish rejimi.
+Kunlik limit faqat gapirilgan vaqtni sanaydi (odam + Rumiyo ovozi); jimlik hisobga kirmaydi.
+LIVE_IDLE=150: shuncha soniya jim bo'lsa qo'ng'iroq yopiladi. Limit: DAILY_MIN (standart 5 daqiqa).

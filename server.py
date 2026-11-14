@@ -846,11 +846,16 @@ LIVE_MODEL = os.getenv("LIVE_MODEL", "gemini-3.8-live")
 LIVE_VOICE = os.getenv("LIVE_VOICE", "Charon")     # boshqa ovozlar: Puck, Kore, Fenrir, Orus, Aoede, Leda, Zephyr
 GEMINI_WS = os.getenv("GEMINI_WS", "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent")
 LIVE_ON = os.getenv("LIVE", "1") != "0"
+LIVE_PTT = os.getenv("LIVE_PTT", "1") != "0"      # 1 = tugma bilan gapirish (mikrofon faqat tugma bosilganda), 0 = eski doimiy eshitish
+LIVE_IDLE = int(os.getenv("LIVE_IDLE", "150"))       # shuncha soniya hech kim gapirmasa, qo'ng'iroq yopiladi (vaqt behuda yonmasin)
 LIVE_NOTE = """
 
 THIS IS A LIVE VOICE CALL. You SPEAK out loud and hear the learner's real voice, continuously. Ignore every instruction above about output lines (UZ / RU / FIX / EMO / Q): there are no labels, you simply talk like a real person on the phone.
 Wherever the instructions above say to put Russian in the `RU:` line, simply say that short Russian word or phrase aloud, clearly and a bit slowly, then go on in Uzbek. All your explaining, scolding, asking and praising stays in natural spoken Uzbek, with the short modern street slang described above. Russian only for the phrase to learn/repeat or inside a tiny game.
-Keep every turn short (1-3 sentences). Speak with real emotion: sigh, gasp, raise your voice when angry, laugh sometimes, pause. FIRST understand what the learner actually MEANT and answer THAT: respond to their real idea or question in your first sentence, and only then scold, joke or teach. React to the learner's actual words right away. When they make a mistake, first mimic their exact wrong words in a mocking, drawn-out voice and really LAUGH out loud at it (an audible laugh, not the word 'ha-ha' read flatly), say what silly thing it actually sounded like, then give the correct Russian and make them repeat. If they interrupt you, stop and answer them. If they speak neither Uzbek nor Russian, scold them for forgetting their own language and demand Uzbek or Russian."""
+LENGTH (overrides any length rule above): every turn is SHORT: 1-2 spoken sentences, about 15-30 words, never more than 35. The learner must speak MORE than you. End almost every turn with a question or a tiny task that makes THEM speak (one sentence to translate, one word to repeat). Never lecture, never list, never explain two things at once.
+HOW THE CALL WORKS: the learner speaks by pressing a button, so what you hear is a finished thought, not a stream. If the audio is empty, unclear or only noise, do NOT guess: say in one funny annoyed sentence that you heard nothing and tell them to press the button and say it again.
+MAKE THEM SAY 'WOW': be genuinely FUNNY and genuinely ANGRY in a way that feels like a living character, not a script. Build every joke from the learner's OWN words and mistakes: twist their exact wrong word into something absurd from Uzbek life (plov, mahalla, bozor, to'y, taksi, qaynona, choyxona), exaggerate it, give it a dramatic mock-serious reaction, then land the correct Russian. Use comic timing: a pause, a gasp, 'voy-voy-voy', a sudden calm after an outburst, fake offence, fake crying, threatening to quit and instantly changing your mind. Escalate: first mistake mild grumbling, repeated mistake louder fury, then when they finally get it right react with shocked grudging delight ('Nima?! To'g'ri aytdingmi?! Voy, yig'lab yuboray...'). Remember what they said earlier in this call and bring it back as a running joke (callback). Surprise them: sometimes a quick riddle, a sudden fake phone call to 'your wife', a fake exam, a bet ('to'g'ri aytsang plov sendan'), a nickname upgrade. Never repeat a joke, an opening, or a reaction twice in one call.
+Speak with real emotion: sigh, gasp, raise your voice when angry, laugh sometimes, pause. FIRST understand what the learner actually MEANT and answer THAT: respond to their real idea or question in your first sentence, and only then scold, joke or teach. React to the learner's actual words right away. When they make a mistake, first mimic their exact wrong words in a mocking, drawn-out voice and really LAUGH out loud at it (an audible laugh, not the word 'ha-ha' read flatly), say what silly thing it actually sounded like, then give the correct Russian and make them repeat. If they interrupt you, stop and answer them. If they speak neither Uzbek nor Russian, scold them for forgetting their own language and demand Uzbek or Russian."""
 
 
 async def live_open(http, sysmsg):
@@ -860,6 +865,8 @@ async def live_open(http, sysmsg):
                                             "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": LIVE_VOICE}}}},
                        "systemInstruction": {"parts": [{"text": sysmsg}]},
                        "inputAudioTranscription": {}, "outputAudioTranscription": {}}}
+    if LIVE_PTT:   # odam tugma bosib gapiradi: model o'zi "gap boshlandi/tugadi" deb taxmin qilmaydi
+        setup["setup"]["realtimeInputConfig"] = {"automaticActivityDetection": {"disabled": True}}
     for k in rotated("gemini"):
         up = None
         try:
@@ -916,8 +923,15 @@ async def ai_live(request):
         opener = ("(o'quvchi chatga qaytib keldi: jahl bilan 'yana kech keldingmi' qabilida kutib ol, oldingi gapimizni eslat)" if again
                   else "(o'quvchi endigina qo'ng'iroqni ochdi: jahldor ohangda salom ber, bugungi mavzuga ulab, bugun nechta gap yodlaganini so'ra)")
         await up.send_str(json.dumps({"realtimeInput": {"text": opener}}))
-        await j({"t": "ready", "left": left0})
-        state = {"wrap": False, "cur_in": "", "cur_out": ""}
+        await j({"t": "ready", "left": left0, "ptt": LIVE_PTT})
+        state = {"wrap": False, "cur_in": "", "cur_out": "", "talking": False, "talk_t0": 0.0, "user_s": 0.0, "ai_s": 0.0, "last": time.time()}
+
+        def used_secs():
+            """Hisobga olinadigan vaqt: odam gapirgan + Rumiyo gapirgan soniyalar. Jimlik va o'ylash hisobga kirmaydi."""
+            if not LIVE_PTT:
+                return time.time() - t0
+            u = state["user_s"] + ((time.time() - state["talk_t0"]) if state["talking"] else 0)
+            return u + state["ai_s"]
 
         async def flush_turn():
             if state["cur_in"].strip():
@@ -929,6 +943,9 @@ async def ai_live(request):
         async def c2u():
             async for m in ws:
                 if m.type == aiohttp.WSMsgType.BINARY:
+                    if LIVE_PTT and not state["talking"]:
+                        continue          # tugma bosilmagan: ovoz yuborilmaydi (shovqin va eko ichkariga o'tmaydi)
+                    state["last"] = time.time()
                     await up.send_str(json.dumps({"realtimeInput": {"audio": {"data": base64.b64encode(m.data).decode(), "mimeType": "audio/pcm;rate=16000"}}}))
                 elif m.type == aiohttp.WSMsgType.TEXT:
                     try:
@@ -937,6 +954,17 @@ async def ai_live(request):
                         continue
                     if o.get("t") == "end":
                         return
+                    if o.get("t") == "ptt" and LIVE_PTT:
+                        state["last"] = time.time()
+                        if o.get("on") and not state["talking"]:
+                            if state["cur_out"].strip() or state["cur_in"].strip():
+                                await flush_turn()
+                            state["talking"], state["talk_t0"] = True, time.time()
+                            await up.send_str(json.dumps({"realtimeInput": {"activityStart": {}}}))
+                        elif not o.get("on") and state["talking"]:
+                            state["user_s"] += min(40.0, time.time() - state["talk_t0"])
+                            state["talking"] = False
+                            await up.send_str(json.dumps({"realtimeInput": {"activityEnd": {}}}))
                 elif m.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.ERROR):
                     return
 
@@ -957,7 +985,10 @@ async def ai_live(request):
                 for part in ((sc.get("modelTurn") or {}).get("parts") or []):
                     inl = part.get("inlineData") or part.get("inline_data")
                     if inl and inl.get("data"):
-                        await ws.send_bytes(base64.b64decode(inl["data"]))
+                        pcm = base64.b64decode(inl["data"])
+                        state["ai_s"] += len(pcm) / 48000.0        # 24 kHz, 16 bit, mono
+                        state["last"] = time.time()
+                        await ws.send_bytes(pcm)
                 it = (sc.get("inputTranscription") or {}).get("text")
                 if it:
                     if state["cur_out"].strip():
@@ -980,9 +1011,13 @@ async def ai_live(request):
             last = -99
             while True:
                 await asyncio.sleep(1)
-                rem = left0 - int(time.time() - t0)
+                rem = left0 - int(used_secs())
                 if rem <= 0:
                     return
+                if LIVE_PTT and not state["talking"] and time.time() - state["last"] > LIVE_IDLE:
+                    return                      # uzoq jimlik: qo'ng'iroq yopiladi
+                if time.time() - t0 > max(900, left0 * 6):
+                    return                      # mutlaq yuqori chegara
                 if rem <= 50 and not state["wrap"]:
                     state["wrap"] = True
                     await up.send_str(json.dumps({"realtimeInput": {"text": "(VAQT TUGAYAPTI: shu gapingdan keyin xayrlash: hazil bilan xayrlash va botga qaytib o'qishni davom ettirishni ayt. Yangi savol berma.)"}}))
@@ -997,7 +1032,7 @@ async def ai_live(request):
             for t in tasks:
                 t.cancel()
             await flush_turn()
-            elapsed = int(time.time() - t0)
+            elapsed = int(used_secs())
             try:
                 await up.close()
             except Exception:

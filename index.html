@@ -244,10 +244,25 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
     if (!live || live.closed) return; liveCleanup(); live = null;
     classicStart();      // Live ishlamasa (limit, tarmoq): oddiy bepul rejimga o'tamiz
   }
+  // Tugma bilan gapirish: bosing -> gapiring -> yana bosing (yoki tugmani bosib turing, qo'yib yuborsangiz yuboriladi)
+  function liveTalkOn(L) {
+    if (L.talking || !L.ready || L.closed) return;
+    liveStopPlay(L); L.curAi = null; L.curMe = null;             // Rumiyo gapirayotgan bo'lsa, darhol jim bo'ladi
+    L.talking = true; L.talkAt = Date.now();
+    try { L.ws.send(JSON.stringify({ t: "ptt", on: true })); } catch (e) {}
+    (L.pre || []).forEach(function (b) { try { L.ws.send(b); } catch (e) {} }); L.pre = [];   // gapning boshi qirqilmasin
+    $("b-mic").classList.add("rec"); state("🎙 Gapiring… tugatgach tugmani yana bosing");
+    clearTimeout(L.maxT); L.maxT = setTimeout(function () { liveTalkOff(L); }, 28000);
+  }
+  function liveTalkOff(L) {
+    if (!L.talking) return; L.talking = false; clearTimeout(L.maxT);
+    $("b-mic").classList.remove("rec"); state("Rumiyo eshityapti…");
+    L.talkTail = true;
+    setTimeout(function () { L.talkTail = false; try { L.ws.send(JSON.stringify({ t: "ptt", on: false })); } catch (e) {} }, 400);   // oxirgi bo'g'in ham yetib borsin
+  }
   function liveMute() {
-    var L = live; if (!L) return; L.muted = !L.muted;
-    $("b-mic").classList.toggle("rec", !L.muted);
-    state(L.muted ? "Mikrofon o'chiq. Yoqish uchun tugmani bosing" : "Eshityapman… istagan payt gapiring, Rumiyo to'xtaydi");
+    var L = live; if (!L) return;
+    if (L.talking) liveTalkOff(L); else liveTalkOn(L);
   }
   function liveStart(j) {
     setLeft(j.left);
@@ -255,7 +270,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
     var proto = location.protocol === "https:" ? "wss:" : "ws:", base = location.pathname.replace(/[^\/]*$/, "");
     try { ws = new WebSocket(proto + "//" + location.host + base + "ai/live?t=" + encodeURIComponent(token)); } catch (e) { return classicStart(); }
     ws.binaryType = "arraybuffer";
-    var L = live = { ws: ws, ready: false, muted: false, next: 0, srcs: [], curMe: null, curAi: null, closed: false };
+    var L = live = { ws: ws, ready: false, muted: false, talking: false, ptt: true, pre: [], next: 0, srcs: [], curMe: null, curAi: null, closed: false };
     state("Ulanyapman…"); $("b-mic").disabled = true;
     try {
       L.pctx = new AC(); if (L.pctx.resume) L.pctx.resume();
@@ -264,12 +279,14 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
       L.proc = L.cin.createScriptProcessor(2048, 1, 1);
       L.proc.onaudioprocess = function (e) {
         if (!L.ready || L.muted || ws.readyState !== 1) return;
+        if (L.ptt && !L.talking && L.pre.length > 8) L.pre.shift();
         var f = e.inputBuffer.getChannelData(0), n = Math.floor(f.length / ratio), o = new Int16Array(n);
         for (var i = 0; i < n; i++) {
           var a = Math.floor(i * ratio), b = Math.min(f.length, Math.floor((i + 1) * ratio)), sum = 0, c = 0;
           for (var k = a; k < b; k++) { sum += f[k]; c++; }
           var v = c ? sum / c : 0; v = Math.max(-1, Math.min(1, v)); o[i] = v < 0 ? v * 32768 : v * 32767;
         }
+        if (L.ptt && !L.talking) { if (!L.talkTail) { L.pre.push(o.buffer); return; } }   // tugma bosilmaguncha ovoz yuborilmaydi
         ws.send(o.buffer);
       };
       srcNode.connect(L.proc); L.proc.connect(L.cin.destination);
@@ -278,11 +295,11 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
       if (L.closed) return;
       if (typeof e.data !== "string") { livePlay(L, e.data); return; }
       var o; try { o = JSON.parse(e.data); } catch (x) { return; }
-      if (o.t === "ready") { L.ready = true; setLeft(o.left); $("b-mic").disabled = false; $("b-mic").classList.add("rec"); state("Eshityapman… istagan payt gapiring, Rumiyo to'xtaydi"); }
+      if (o.t === "ready") { L.ready = true; L.ptt = o.ptt !== false; setLeft(o.left); $("b-mic").disabled = false; if (L.ptt) { state("Rumiyo salom beryapti… gapirmoqchi bo'lsangiz tugmani bosing"); } else { $("b-mic").classList.add("rec"); state("Eshityapman… istagan payt gapiring, Rumiyo to'xtaydi"); } }
       else if (o.t === "in") { if (!L.curMe) L.curMe = mkBubble("me"); L.curMe.textContent += o.text; L.curAi = null; $("log").scrollTop = 1e9; }
       else if (o.t === "out") { if (!L.curAi) L.curAi = mkBubble("ai"); L.curAi.textContent += o.text; L.curMe = null; $("log").scrollTop = 1e9; }
       else if (o.t === "int") { liveStopPlay(L); L.curAi = null; }
-      else if (o.t === "turn") { L.curMe = null; L.curAi = null; }
+      else if (o.t === "turn") { L.curMe = null; L.curAi = null; if (L.ptt && !L.talking) state("Sizning navbatingiz: tugmani bosib gapiring 🎙"); }
       else if (o.t === "left") { setLeft(o.left); }
       else if (o.t === "nolive") { liveFail(); }
       else if (o.t === "error") { liveCleanup(); state(o.error || "Xatolik"); }
@@ -416,7 +433,21 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
   }
 
   try { if (window.Telegram && Telegram.WebApp) { Telegram.WebApp.ready(); Telegram.WebApp.expand(); } } catch (e) {}
-  $("b-go").onclick = begin; $("b-mic").onclick = micToggle;
+  $("b-go").onclick = begin;
+  // Jonli rejimda tugma darhol (bosilganda) ishlaydi: tez bossangiz - yoqiladi/o'chadi, bosib tursangiz - qo'yib yuborganda yuboriladi
+  $("b-mic").addEventListener("pointerdown", function (e) {
+    var L = live; if (!L || L.closed || !L.ready || !L.ptt) return;
+    e.preventDefault();
+    if (L.talking) { L.ignoreUp = true; liveTalkOff(L); } else { L.ignoreUp = false; L.pressAt = Date.now(); liveTalkOn(L); }
+  });
+  function micRelease() {
+    var L = live; if (!L || L.closed || !L.ptt) return;
+    if (L.talking && !L.ignoreUp && L.pressAt && Date.now() - L.pressAt > 600) liveTalkOff(L);
+    L.pressAt = 0;
+  }
+  $("b-mic").addEventListener("pointerup", micRelease);
+  $("b-mic").addEventListener("pointercancel", micRelease);
+  $("b-mic").onclick = function () { if (live && !live.closed && live.ptt) return; micToggle(); };
   $("b-end").onclick = function () {
     if (live && !live.closed) { try { live.ws.send(JSON.stringify({ t: "end" })); } catch (e) {} var L0 = live; setTimeout(function () { if (!L0.closed) { liveCleanup(); finish({ cta: "Yaxshi gaplashdik! Botga qayting 👇" }); } }, 2500); return; }
     speaking = false; stopSpeak(); stopRec();
