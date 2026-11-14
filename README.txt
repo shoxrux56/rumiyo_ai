@@ -42,7 +42,7 @@ Ovozlar: LIVE_VOICE_<M|F>_<FRIENDLY|ANGRY|FIERY|SWEET> env bilan almashtiriladi 
 Mijoz tanlovni "avatar.xarakter" (masalan f1.fiery) ko'rinishida /ai/start, /ai/live?p=..&g=.. va /ai/turn (X-Persona, X-Gender) orqali yuboradi.
 
 --- 3D avatar (VRM) ---
-Suhbatda avatar butun bo'yi bilan ko'rinadi (gapirganda qo'l ishoralari, tana tebranishi); tugma bilan yuz ko'rinishiga o'tadi (rumiyo_view). Salomlashuvda yuz.
+Suhbat ekrani anime/visual novel uslubida: ustoz BUTUN EKRANni egallaydi (bel ostigacha), gapirganda tepada dialog oynasi (ustoz nomi bilan), pastda mikrofon; qo'l ishoralari va tana tebranishi bor. Tepadagi tugmalar: 🎬/🪟 to'liq ekran <-> kichik ko'rinish (rumiyo_view2), 📜 suhbat tarixi. Salomlashuvda yuz ko'rinishi.
 Hamma model CC0 (tijorat uchun ruxsat), manba: github.com/madjin/vrm-samples (VRoid beta namunalari), teksturalari kichraytirilgan:
   ustoz-m1 = Sakurada_Fumiriya, ustoz-f1 = Darkness_Shibu, ustoz-f2 = HairSample_Female. th-*.jpg: tanlash kartochkalari uchun rasmlar.
 vrm/rumiyo-vrm.js: three.js + @pixiv/three-vrm (MIT) dan yig'ilgan bundle (esbuild).

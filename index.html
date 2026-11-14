@@ -62,6 +62,26 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 .ac b{font-size:.82rem}
 .ac[aria-pressed=true]{border-color:var(--acc);box-shadow:0 0 0 3px rgba(232,89,12,.18);transform:translateY(-2px)}
 .av.body{width:auto;height:min(44vh,380px);aspect-ratio:3/4;border-radius:22px}
+.cap{position:relative;margin-top:10px;background:rgba(255,255,255,.93);color:#2a1a10;border:2px solid var(--capc,#e8590c);border-radius:20px;padding:16px 16px 12px;box-shadow:0 8px 28px rgba(0,0,0,.28);font-weight:600}
+#cap-t{max-height:28vh;overflow:auto}
+.cap .tag{position:absolute;top:-13px;left:16px;background:var(--capc,#e8590c);color:#fff;padding:2px 14px;border-radius:99px;font-size:.78rem;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.cap .m{background:none;border:0;padding:0;max-width:100%;align-self:auto;color:#2a1a10}
+.cap .m small{color:#6b5444;font-weight:500}
+.cap .m .ru{color:#d9480f}
+.capme{align-self:flex-end;max-width:85%;background:rgba(0,0,0,.45);color:#fff;border-radius:99px;padding:4px 14px;font-size:.85rem;backdrop-filter:blur(4px)}
+body.stage{background:#111}
+body.stage .av{position:fixed!important;inset:0;width:auto;height:auto;aspect-ratio:auto;margin:0;border-radius:0;box-shadow:none;z-index:0}
+body.stage .av.av-pop{animation:none}
+body.stage #s-chat>*:not(.av){position:relative;z-index:2}
+body.stage .bar{margin:-12px -16px 0;padding:max(12px,env(safe-area-inset-top,0px)) 16px 22px;background:linear-gradient(rgba(0,0,0,.45),transparent);color:#fff}
+body.stage .bar .topic,body.stage .bar h2{color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.5)}
+body.stage .bar .link{color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+body.stage .log{visibility:hidden}
+body.stage .log.hist{visibility:visible;background:rgba(255,255,255,.92);border-radius:18px;padding:12px;color:#2a1a10}
+body.stage .log.hist .m{color:#2a1a10}
+body.stage .dock{margin:0 -16px -12px;padding:24px 16px max(12px,env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,rgba(0,0,0,.5))}
+body.stage .dock .state{background:rgba(255,255,255,.85);color:#4a3527;padding:3px 14px;border-radius:99px}
+body.stage .dock .link{color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.6)}
 .note{font-size:.78rem;color:var(--mut);margin:2px 0 0}
 [hidden]{display:none!important}
 </style>
@@ -105,8 +125,10 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 </section>
 
 <section id="s-chat" class="scr hide">
-  <div class="bar"><div><h2 id="c-name">Rumiyo</h2><div class="topic" id="c-topic"></div></div><span style="display:flex;gap:8px;align-items:center"><button id="b-view" class="link" type="button" style="padding:2px 4px;font-size:.82rem"></button><span class="chip">Qoldi <b id="left">--:--</b></span></span></div>
+  <div class="bar"><div><h2 id="c-name">Rumiyo</h2><div class="topic" id="c-topic"></div></div><span style="display:flex;gap:8px;align-items:center"><button id="b-hist" class="link" type="button" style="padding:2px 4px;font-size:.9rem" hidden>📜</button><button id="b-view" class="link" type="button" style="padding:2px 4px;font-size:.82rem"></button><span class="chip">Qoldi <b id="left">--:--</b></span></span></div>
   <div class="av" id="av"></div>
+  <div id="cap" class="cap" hidden><span class="tag" id="cap-tag"></span><div id="cap-t"></div></div>
+  <div id="capme" class="capme" hidden></div>
   <div id="log" class="log"></div>
   <div class="dock">
     <button id="b-mic" class="orb" aria-label="Gapirish"><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
@@ -525,15 +547,34 @@ var RumiyoAvatar = (function () {
   }).catch(function () {});
   applyPick(false); helloMode();
   // ko'rinish: suhbatda butun bo'y (qo'l ishoralari bilan), salomlashuvda yuz; tugma bilan almashtiriladi
-  var viewMode = "body";
-  try { var sv = localStorage.getItem("rumiyo_view"); if (sv === "face" || sv === "body") viewMode = sv; } catch (e) {}
+  var viewMode = "stage";
+  try { var sv = localStorage.getItem("rumiyo_view2"); if (sv === "stage" || sv === "card") viewMode = sv; } catch (e) {}
+  var CAPC = { friendly: "#2f8fe0", fiery: "#e0457b", sweet: "#ec6fb0", angry: "#e8590c" };
+  function stageOn() { return document.body.classList.contains("stage"); }
   function applyView(screen) {
-    var v = screen === "s-chat" ? viewMode : "face";
+    var chat = screen === "s-chat", v = chat ? (viewMode === "stage" ? "bust" : "body") : "face";
     var ok = avC.view(v);
     $("av").classList.toggle("body", ok && v === "body");
-    $("b-view").textContent = viewMode === "body" ? "🙂 Yuzni yaqin" : "🧍 Butun bo'y";
+    document.body.classList.toggle("stage", chat && viewMode === "stage");
+    $("b-view").textContent = viewMode === "stage" ? "🪟 Kichik" : "🎬 To'liq ekran";
+    $("b-hist").hidden = !(chat && viewMode === "stage");
+    $("cap").style.setProperty("--capc", CAPC[P.c] || "#e8590c"); $("cap-tag").textContent = tname();
+    syncCap();
   }
-  $("b-view").onclick = function () { viewMode = viewMode === "body" ? "face" : "body"; try { localStorage.setItem("rumiyo_view", viewMode); } catch (e) {} applyView("s-chat"); };
+  $("b-view").onclick = function () { viewMode = viewMode === "stage" ? "card" : "stage"; try { localStorage.setItem("rumiyo_view2", viewMode); } catch (e) {} applyView("s-chat"); };
+  $("b-hist").onclick = function () { $("log").classList.toggle("hist"); $("log").scrollTop = 1e9; };
+  // dialog oynasi: ustozning oxirgi gapi tepada, o'quvchining gapi pastda
+  function syncCap() {
+    var ms = $("log").children, ai = null, me = null;
+    for (var i = ms.length - 1; i >= 0 && !(ai && me); i--) {
+      var m = ms[i]; if (m.classList.contains("fix")) continue;
+      if (m.classList.contains("me")) { if (!me) me = m; } else if (!ai) ai = m;
+    }
+    $("cap-t").textContent = ""; if (ai) $("cap-t").appendChild(ai.cloneNode(true));
+    $("cap").hidden = !stageOn() || !ai;
+    $("capme").hidden = !stageOn() || !me; if (me) $("capme").textContent = "🎤 " + me.textContent;
+  }
+  try { new MutationObserver(syncCap).observe($("log"), { childList: true, subtree: true, characterData: true }); } catch (e) {}
   function setAv(n) {
     if (n === "angry_start") n = "angry";
     if (soft()) { if (n === "speak") n = "warm"; else if (n === "angry") n = "happy"; }
