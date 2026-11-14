@@ -455,7 +455,7 @@ def get_session(info):
 # Ustoz = avatar (m1 erkak, f1 va f2 ayol) + xarakter (4 xil). O'quvchi bir marta tanlaydi, PICK_LOCK kundan keyin o'zgartirsa bo'ladi.
 AVATARS = {"m1": "m", "f1": "f", "f2": "f"}
 PERSONAS = ("friendly", "angry", "fiery", "sweet")
-PICK_LOCK = int(float(os.getenv("PERSONA_LOCK_DAYS", "7")) * 86400)
+PICK_LOCK = int(float(os.getenv("PERSONA_LOCK_DAYS", "0")) * 86400)
 _VOICES = {
     ("m", "friendly"): "Puck", ("m", "angry"): "Charon", ("m", "fiery"): "Fenrir", ("m", "sweet"): "Achird",
     ("f", "friendly"): "Zephyr", ("f", "angry"): "Kore", ("f", "fiery"): "Autonoe", ("f", "sweet"): "Sulafat",

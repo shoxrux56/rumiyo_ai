@@ -128,7 +128,7 @@ body.stage .dock .link{color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.6)}
 </section>
 
 <section id="s-chat" class="scr hide">
-  <div class="bar"><div><h2 id="c-name">Rumiyo</h2><div class="topic" id="c-topic"></div></div><span style="display:flex;gap:8px;align-items:center"><button id="b-lite" class="link" type="button" style="padding:2px 4px;font-size:.9rem" title="Yengil rejim (2D avatar)">⚡</button><button id="b-hist" class="link" type="button" style="padding:2px 4px;font-size:.9rem" hidden>📜</button><button id="b-view" class="link" type="button" style="padding:2px 4px;font-size:.82rem"></button><span class="chip">Qoldi <b id="left">--:--</b></span></span></div>
+  <div class="bar"><div><h2 id="c-name">Rumiyo</h2><div class="topic" id="c-topic"></div></div><span style="display:flex;gap:8px;align-items:center"><button id="b-lite" class="link" type="button" hidden style="padding:2px 4px;font-size:.9rem" title="Yengil rejim (2D avatar)">⚡</button><button id="b-hist" class="link" type="button" style="padding:2px 4px;font-size:.9rem" hidden>📜</button><button id="b-view" class="link" type="button" style="padding:2px 4px;font-size:.82rem"></button><span class="chip">Qoldi <b id="left">--:--</b></span></span></div>
   <div class="av" id="av"></div>
   <div id="cap" class="cap" hidden><span class="tag" id="cap-tag"></span><div id="cap-t"></div></div>
   <div id="capme" class="capme" hidden></div>
@@ -546,7 +546,7 @@ var RumiyoAvatar = (function () {
   $("b-go").addEventListener("click", function (e) {
     if (chosen && !picking) return;
     if (!sel.g || !sel.a || !sel.c) { e.stopImmediatePropagation(); $("pickhint").hidden = false; return; }
-    if (!chosen || picking) lockLeft = 7 * 86400;
+    if (!chosen || picking) lockLeft = 0;
     chosen = true; picking = false; saveLocal(); helloMode();
   }, true);
   fetch("ai/me?t=" + encodeURIComponent(token)).then(function (r) { return r.json(); }).then(function (j) {
