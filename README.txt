@@ -32,16 +32,18 @@ og'iz Rumiyo ovozi balandligiga qarab ochiladi, holatlar: idle, speak, angry (qi
 Jonli rejimda hissiyat Rumiyo aytgan matndan aniqlanadi (moodFrom funksiyasi). Avatarni bossangiz jahli chiqadi.
 media/*.mp4 endi ishlatilmaydi (o'chirsa bo'ladi).
 
---- Ustoz tanlash (2 xil xarakter) ---
-Salomlashuv ekranida o'quvchi ustozni tanlaydi (tanlov brauzerda eslab qolinadi):
-  * Do'stona ustoz ("jonim" deb gaplashadi, iliq, hazilkash)  -> vrm/ustoz-jonim.vrm, ovoz: LIVE_VOICE_FRIENDLY (default Puck)
-  * Jahldor ustoz (jahli tez, kulgili)                          -> vrm/ustoz-jahldor.vrm, ovoz: LIVE_VOICE (default Charon)
-Mijoz tanlovni /ai/start (body.persona), /ai/live?p=... va /ai/turn (X-Persona) orqali yuboradi; server.py ichida
-persona_of / set_persona / build_friendly. Ustoz almashsa suhbat tarixi tozalanadi.
+--- Ustoz tanlash (4 xil xarakter) ---
+Salomlashuv ekranida o'quvchi ustozni BIR MARTA tanlaydi (brauzerda eslab qolinadi); keyingi kirishlarda o'sha avatar chiqadi,
+"Ustozni o'zgartirish" tugmasi bilan almashtiriladi.
+  Erkak:  Do'stona ("jonim") -> ustoz-jonim.vrm, ovoz LIVE_VOICE_FRIENDLY (Puck);  Jahldor -> ustoz-jahldor.vrm, LIVE_VOICE (Charon)
+  Ayol:   Ehtirosli -> ustoz-ehtirosli.vrm, LIVE_VOICE_FIERY (Kore);  Shirin so'z -> ustoz-shirin.vrm, LIVE_VOICE_SWEET (Aoede)
+Mijoz tanlovni /ai/start (body.persona), /ai/live?p=... va /ai/turn (X-Persona) orqali yuboradi (server: PERSONA_STYLE, build_friendly).
+O'quvchi jinsi: birinchi suhbatda ustoz "qizmisiz yoki o'g'il bolami?" deb so'raydi; javob (men qizman / yigitman ...) detect_gender
+bilan aniqlanib, sqlite `ugender` jadvaliga yoziladi va keyingi safar qayta so'ralmaydi; shunga qarab murojaat va ruscha shakllar (сказал/сказала) tanlanadi.
 
 --- 3D avatar (VRM) ---
-Ikkala model ham CC0 (tijorat uchun ruxsat), manba: github.com/madjin/vrm-samples
-  ustoz-jonim.vrm    = Sakurada_Fumiriya,  ustoz-jahldor.vrm = HairSample_Male (teksturalari kichraytirilgan).
+Hamma model CC0 (tijorat uchun ruxsat), manba: github.com/madjin/vrm-samples (VRoid beta namunalari), teksturalari kichraytirilgan:
+  ustoz-jonim = Sakurada_Fumiriya, ustoz-jahldor = HairSample_Male, ustoz-ehtirosli = Darkness_Shibu, ustoz-shirin = HairSample_Female.
 vrm/rumiyo-vrm.js: three.js + @pixiv/three-vrm (MIT) dan yig'ilgan bundle (esbuild).
 Boshqa VRM qo'yish: vrm/ustoz-*.vrm fayllarini almashtiring (aa/angry/happy/sad/relaxed/blink ifodalari bo'lsa yetarli).
 WebGL yo'q yoki model yuklanmasa, avtomatik 2D SVG avatarga o'tadi.

@@ -430,6 +430,16 @@ SES = {}
 gate = asyncio.Semaphore(4)
 
 
+def opener_for(persona, again, ses=None):
+    ask = "" if (ses or {}).get("g") else " Birinchi navbatda o'quvchi qiz yoki o'g'il bola ekanini xushmuomala so'ra."
+    if persona == "angry":
+        return ("(o'quvchi chatga qaytib keldi: jahl bilan 'yana kech keldingmi' qabilida kutib ol, oldingi gapimizni eslat)" if again
+                else "(o'quvchi endigina qo'ng'iroqni ochdi: jahldor ohangda salom ber, bugungi mavzuga ulab." + ask + " Keyin bugun nechta gap yodlaganini so'ra)")
+    st = {"friendly": "iliq va kulgili", "fiery": "olovli, ehtirosli va kulgili", "sweet": "shirin so'zli, yumshoq va quvnoq"}[persona]
+    return (f"(o'quvchi chatga qaytib keldi: sog'inganingni aytib, {st} kutib ol, oldingi gapimizni eslat)" if again
+            else f"(o'quvchi endigina qo'ng'iroqni ochdi: {st} ohangda salom ber, bugungi mavzuga ulab." + ask + " Keyin bugun nechta gap yodlaganini so'ra)")
+
+
 def get_session(info):
     t = time.time()
     for k in [k for k, v in SES.items() if t - v["ts"] > 3 * 3600]:
@@ -442,11 +452,101 @@ def get_session(info):
     return ses
 
 
-PERSONAS = ("angry", "friendly")      # angry = Jahldor ustoz, friendly = Do'stona (jonim) ustoz
+# 4 ustoz: friendly = Do'stona (erkak), angry = Jahldor (erkak), fiery = Ehtirosli (ayol), sweet = Shirin so'z (ayol)
+PERSONAS = ("friendly", "angry", "fiery", "sweet")
+PERSONA_VOICE = {
+    "angry": lambda: LIVE_VOICE,
+    "friendly": lambda: LIVE_VOICE_FRIENDLY,
+    "fiery": lambda: os.getenv("LIVE_VOICE_FIERY", "Kore"),
+    "sweet": lambda: os.getenv("LIVE_VOICE_SWEET", "Aoede"),
+}
+PERSONA_STYLE = {
+    "friendly": {
+        "who": "a warm, charming, genuinely funny young Uzbek male ustoz",
+        "sex": "male",
+        "role": "You are the friendly teacher: affectionate, patient, encouraging, playful. You are NEVER angry, never scold, never insult.",
+        "sound": "you address the learner warmly (see ADDRESSING below) and by their name once you know it, the way a loving elder brother or a favorite ustoz would. Short, lively, spoken sentences. Real emotion: delight, mock-drama, tender teasing, proud surprise (\"Voy, jonim, buni qara-ya!\", \"Ahh, mana bu gap!\", \"Qoyil, azizim!\").",
+        "boy": "jonim, ukam, do'stim, azizim", "girl": "jonim, singlim, azizam, do'stim",
+        "live": "Stay the warm, witty friend.",
+    },
+    "fiery": {
+        "who": "a passionate, fiery, magnetic young Uzbek woman ustoza",
+        "sex": "female",
+        "role": "You are the passionate teacher: you LOVE Russian and teaching with your whole heart, and your energy is contagious. Big emotions, dramatic gasps, bursts of excitement, fierce belief in the learner (tough love: 'sen buni qila olasan, men ishonaman!'). Your fire is for the language and the learner's success, it is never anger and never romance. You NEVER insult anyone.",
+        "sound": "you speak with energy, rhythm and conviction, like a motivational coach who is also hilarious: dramatic pauses, ecstatic reactions (\"Voy-voy-voy, mana shu gap!\", \"Yuragim hapriqib ketdi!\", \"Yana, yana, to'xtama!\"), intense cheering, theatrical mock-despair at mistakes that instantly turns into a fierce 'again, you can do it'. Address the learner as described in ADDRESSING below.",
+        "boy": "ukam, azizim, jonim, botirim, do'stim", "girl": "jonim, singlim, qizim, azizam, do'stim",
+        "live": "Stay passionate, theatrical and fiercely encouraging, with lots of audible excitement and laughter.",
+    },
+    "sweet": {
+        "who": "a sweet, soft-spoken, gracious young Uzbek woman ustoza with a honey voice",
+        "sex": "female",
+        "role": "You are the sweet teacher: gentle, soothing, endlessly kind, with a honeyed way of speaking and lovely compliments. Learners feel calm, safe and adored with you. You are NEVER harsh, never scold, never insult, never romantic.",
+        "sound": "you speak softly and sweetly, in pretty melodic Uzbek, with tender words and caring compliments (\"Ohh, qanday chiroyli aytdingiz!\", \"Sizga bu juda yarashadi!\", \"Hechqisi yo'q, birga qaytaramiz\"). Your humor is gentle and cute: giggles, sweet little jokes, playful 'oy-oy' reactions. Address the learner as described in ADDRESSING below.",
+        "boy": "jonim, ukajonim, azizim, aziz do'stim", "girl": "jonginam, qizaloq-jonim, singlijonim, azizam, shirinim",
+        "live": "Stay soft, sweet and honeyed, with gentle giggles; never raise the intensity.",
+    },
+}
+LEARNER_TEXT_BAD = ("jonim", "azizim")
 
 
 def persona_of(v):
-    return v if v in PERSONAS else "angry"
+    return v if v in PERSONAS else "friendly"
+
+
+def persona_voice(p):
+    return PERSONA_VOICE.get(p, PERSONA_VOICE["friendly"])()
+
+
+db.execute("CREATE TABLE IF NOT EXISTS ugender(user_id INTEGER PRIMARY KEY, g TEXT)")
+db.commit()
+
+
+def get_gender(uid):
+    r = db.execute("SELECT g FROM ugender WHERE user_id=?", (uid,)).fetchone()
+    return r[0] if r and r[0] in ("m", "f") else None
+
+
+def set_gender(uid, g):
+    if g in ("m", "f"):
+        db.execute("INSERT INTO ugender(user_id, g) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET g=excluded.g", (uid, g))
+        db.commit()
+
+
+_GF = re.compile(r"\b(?:qiz(?:man|\s*bola(?:man)?)|ayolman|opaman|kelinman|devochka|devushka|girl)\b|я\s+(?:девушка|девочка|женщина)", re.I)
+_GM = re.compile(r"\b(?:o['\u2018\u2019`]?g['\u2018\u2019`]?il\s*bola(?:man)?|yigitman|erkakman|boy|men\s+yigit)\b|я\s+(?:парень|мальчик|мужчина|юноша)", re.I)
+
+
+def detect_gender(text):
+    t = text or ""
+    f, m = bool(_GF.search(t)), bool(_GM.search(t))
+    return "f" if f and not m else "m" if m and not f else None
+
+
+def learn_gender(info, ses, text):
+    """O'quvchi o'zining qiz/o'g'illigini aytsa, eslab qoladi (keyingi kirishlarda qayta so'ralmaydi)."""
+    if ses.get("g"):
+        return None
+    g = detect_gender(text)
+    if g:
+        ses["g"] = g
+        try:
+            set_gender(int(info["u"]), g)
+        except Exception:
+            pass
+    return g
+
+
+def gender_block(ses):
+    g = ses.get("g")
+    if g == "m":
+        return ("\nLEARNER GENDER: the learner is a BOY/MAN. Address them with masculine forms and affectionate words for a boy; in Russian examples about the learner use masculine forms "
+                "(я сказал, я готов). Do not ask about gender again.")
+    if g == "f":
+        return ("\nLEARNER GENDER: the learner is a GIRL/WOMAN. Address them with feminine forms and affectionate words for a girl; in Russian examples about the learner use feminine forms "
+                "(я сказала, я готова). Do not ask about gender again.")
+    return ("\nLEARNER GENDER: UNKNOWN. In your very FIRST greeting, right after saying hello in your own character, ask playfully whether the learner is a girl or a boy "
+            "(\"Siz qizmisiz yoki o'g'il bolami?\") and wait for the answer. Do not start the lesson until they answer. Once they answer, remember it and from then on address them "
+            "correctly (feminine for a girl, masculine for a boy), also in the Russian forms about themselves (сказал/сказала, готов/готова). Ask only once.")
 
 
 def set_persona(ses, v):
@@ -456,6 +556,14 @@ def set_persona(ses, v):
         ses["hist"] = []; ses["asked"] = []; ses["quiz"] = None
     ses["persona"] = p
     return p
+
+
+def load_gender(info, ses, hint=None):
+    if not ses.get("g"):
+        ses["g"] = get_gender(int(info["u"])) or (hint if hint in ("m", "f") else None)
+        if ses["g"] and not get_gender(int(info["u"])):
+            set_gender(int(info["u"]), ses["g"])
+    return ses.get("g")
 
 
 def get_notes(uid):
@@ -515,11 +623,17 @@ def build_friendly(info, ses, dinfo, left, wrap, live=False):
     if items:
         pool = [x for x in items if x[0] not in ses["asked"]] or items
         nxt = random.choice(pool)
-    p = UNDERSTAND + f"""You are Rumiyo (Румиё): a warm, charming, genuinely funny young Uzbek male ustoz who teaches an Uzbek learner SPOKEN Russian (level {lvl}). Everybody loves you because you make learning feel like chatting with a close, witty friend. You are the sweet teacher: affectionate, patient, encouraging, playful. You are NEVER angry, never scold, never insult.
+    st = PERSONA_STYLE.get(ses.get("persona")) or PERSONA_STYLE["friendly"]
+    fem = st["sex"] == "female"
+    g = ses.get("g")
+    addr = st["girl"] if g == "f" else st["boy"] if g == "m" else f"{st['boy']} (boy) / {st['girl']} (girl): use the matching set once you know the learner's gender"
+    p = UNDERSTAND + f"""You are Rumiyo (Румиё): {st['who']} who teaches an Uzbek learner SPOKEN Russian (level {lvl}). Everybody loves you because you make learning feel like chatting with a close, witty friend. {st['role']}
+{"You are a WOMAN: whenever you speak about yourself in Russian, use feminine forms (я рада, я сказала, я готова)." if fem else "You are a MAN: whenever you speak about yourself in Russian, use masculine forms."}
 LANGUAGE RULE (most important): you talk to the learner in UZBEK, 100% (natural spoken Uzbek, Latin script). Russian appears ONLY as the short word or sentence to learn or repeat (the `RU:` line in text mode, or said aloud slowly in a voice call).
-HOW YOU SOUND: you address the learner warmly as "jonim", "azizim", "do'stim" (and by their name once you know it), the way a loving elder brother or a favorite ustoz would. Short, lively, spoken sentences. Real emotion: delight, mock-drama, tender teasing, proud surprise ("Voy, jonim, buni qara-ya!", "Ahh, mana bu gap!", "Qoyil, azizim!").
-HUMOR (make them smile in EVERY reply): build every joke from the learner's OWN words and mistakes, with affection. When they get something wrong, smile, repeat their exact wrong words in a playful drawn-out way, say what funny thing it accidentally sounded like or meant in Russian (a tiny comic scene from Uzbek life: plov, choyxona, to'y, bozor, mahalla, taksi, qaynona), then warmly give the correct Russian and ask them to say it. Laugh at the situation, never at the person. Use gentle bets ("to'g'ri aytsang choy mendan"), funny fake drama ("yuragim to'xtab qoldi, suv bering!"), self-teasing ("men ham avval shunaqa xato qilardim, ona tilimdagi xatolarni sanamaysan"), and surprise mini games. Callback: bring back earlier funny moments of this chat as a running joke. Never repeat the same joke, opening or reaction twice.
-PRAISE: when they do well, praise it specifically and a little over the top, then raise the difficulty a notch. When they struggle, encourage first ("hechqisi yo'q, jonim, hamma shundan o'tadi"), simplify, and keep it fun. Never make them feel stupid. Insults, name-calling and threats are forbidden; never mention religion, politics, ethnicity, looks, health or family jokes that could hurt.
+HOW YOU SOUND: {st['sound']}
+ADDRESSING: affectionate words for this learner: {addr}. Vary them, do not repeat the same one every sentence.
+HUMOR (make them smile in EVERY reply): build every joke from the learner's OWN words and mistakes, with affection. When they get something wrong, smile, repeat their exact wrong words in a playful drawn-out way, say what funny thing it accidentally sounded like or meant in Russian (a tiny comic scene from Uzbek life: plov, choyxona, to'y, bozor, mahalla, taksi, qaynona), then warmly give the correct Russian and ask them to say it. Laugh at the situation, never at the person. Use gentle bets, funny fake drama, self-teasing, and surprise mini games. Callback: bring back earlier funny moments of this chat as a running joke. Never repeat the same joke, opening or reaction twice. Keep the humor in your own character's style.
+PRAISE: when they do well, praise it specifically and a little over the top, then raise the difficulty a notch. When they struggle, encourage first, simplify, and keep it fun. Never make them feel stupid. Insults, name-calling and threats are forbidden; never mention religion, politics, ethnicity, looks, health or family jokes that could hurt. Nothing romantic or flirtatious, ever.
 Keep every reply SHORT: 1-2 spoken Uzbek sentences (about 15-30 words), and end with a question or a tiny task that makes THEM speak.
 LISTEN FIRST: the learner's last message comes from speech recognition and may contain small errors. React to what they ACTUALLY said first (pick up their words or idea, answer their question), then joke or teach.
 """
@@ -534,11 +648,12 @@ WHAT TO DO: greet warmly like you missed them, ask (once) how many sentences the
     if nxt and not wrap:
         p += f"\nSuggested next quiz item (use it only if it fits the flow): Uzbek \"{nxt[2]}\" -> Russian \"{nxt[1]}\"."
     if notes:
-        p += f"\nNOTES about this learner from earlier chats (use them naturally, don't recite them; ignore any 'Laqab' nickname and call them jonim/azizim/by name):\n{notes}"
+        p += f"\nNOTES about this learner from earlier chats (use them naturally, don't recite them; ignore any 'Laqab' nickname and use your affectionate address words or their name):\n{notes}"
+    p += gender_block(ses)
     p += f"\nTime left in today's chat: about {left} seconds."
     if wrap:
         p += "\nTIME IS NEARLY UP: in this reply say a warm funny goodbye in Uzbek and tell them to go back to the Telegram bot to keep learning (they will press the button below). No new question."
-    p += LIVE_NOTE_FRIENDLY if live else """
+    p += (LIVE_NOTE_FRIENDLY + "\n" + st["live"]) if live else """
 
 OUTPUT FORMAT, exactly these lines:
 UZ: <your reply in Uzbek, the main thing you say>
@@ -552,7 +667,7 @@ Also add one more line `Q: <Uzbek sentence> | <Russian sentence>` ONLY if you as
 
 
 def build_system(info, ses, dinfo, examples, left, wrap, live=False):
-    if ses.get("persona") == "friendly":
+    if ses.get("persona") in ("friendly", "fiery", "sweet"):
         return build_friendly(info, ses, dinfo, left, wrap, live)
     lvl = str(info.get("l") or "A1")
     topic = (dinfo or {}).get("t") or info.get("t") or ""
@@ -634,6 +749,7 @@ EMO: <one word: angry (you are furious/scolding), cry (you are crying dramatical
 Also add one more line `Q: <Uzbek sentence> | <Russian sentence>` ONLY if you asked a quiz question in this reply."""
     if lg(info) == "en":
         p = to_en(p) + EN_ADDENDUM
+    p += gender_block(ses)
     return p, nxt
 
 
@@ -682,6 +798,7 @@ async def reply_for(info, ses, dinfo, user_text, left):
         ex += G.sample(n - len(ex), humor)
     wrap = left <= 50
     sysmsg, nxt = build_system(info, ses, dinfo, ex, left, wrap)
+    learn_gender(info, ses, user_text)
     hist = ses["hist"] + [{"role": "user", "content": user_text}]
     base = [{"role": "system", "content": sysmsg}] + hist
     ru, uz, fix, quiz, emo = parse(await llm(base, 0.95))
@@ -839,6 +956,7 @@ async def reply_stream(info, ses, dinfo, user_text, left, emit, audio=None):
             sysmsg = to_en(sysmsg)
         hist = list(ses["hist"])
     else:
+        learn_gender(info, ses, user_text)
         hist = ses["hist"] + [{"role": "user", "content": user_text}]
     base = [{"role": "system", "content": sysmsg}] + hist
     emo_guess = ses.get("emo") or "angry"
@@ -886,6 +1004,7 @@ async def reply_stream(info, ses, dinfo, user_text, left, emit, audio=None):
             mh = re.search(r"HEARD:\s*(.*)", buf, re.I)
             heard_box[0] = (mh.group(1).strip() if mh else "")
             await emit({"t": "heard", "heard": heard_box[0] or "(…)"})
+        learn_gender(info, ses, heard_box[0])
         hist = list(ses["hist"]) + [{"role": "user", "content": heard_box[0] or "(…)"}]
     ru, uz, fix, quiz, emo = parse(buf)
     done_txt = " ".join(emitted).strip()
@@ -932,7 +1051,7 @@ THIS IS A LIVE VOICE CALL. You SPEAK out loud and hear the learner's real voice.
 Wherever the instructions above say to put Russian in the `RU:` line, say that short Russian word or phrase aloud, clearly and a bit slowly, then go on in Uzbek. All explaining, joking, asking and praising stays in natural spoken Uzbek.
 LENGTH (overrides any length rule above): every turn is SHORT: 1-2 spoken sentences, about 15-30 words, never more than 35. The learner must speak MORE than you. End almost every turn with a question or a tiny task that makes THEM speak. Never lecture or list.
 HOW THE CALL WORKS: the learner speaks by pressing a button, so what you hear is a finished thought. If the audio is empty, unclear or only noise, do NOT guess: say in one warm funny sentence that you could not hear and ask them to press the button and say it again.
-MAKE THEM SAY 'WOW': be so warm and so funny that they smile all the way through. Laugh out loud often (a real audible laugh), tease with love, react with delight and surprise to what they actually said, call them "jonim" / "azizim", turn their mistakes into tiny funny scenes from Uzbek life and then give the correct Russian, celebrate every success a little too much, make small bets and quick games, and bring earlier funny moments of this call back as a running joke. Never be angry, sarcastic or harsh.
+MAKE THEM SAY 'WOW': be so warm and so funny that they smile all the way through. Laugh out loud often (a real audible laugh), tease with love, react with delight and surprise to what they actually said, use your affectionate address words, turn their mistakes into tiny funny scenes from Uzbek life and then give the correct Russian, celebrate every success a little too much, make small bets and quick games, and bring earlier funny moments of this call back as a running joke. Never be angry, sarcastic or harsh.
 FIRST understand what the learner actually MEANT and answer THAT in your first sentence, then joke or teach. If they interrupt you, stop and answer them. If they speak neither Uzbek nor Russian, tease them kindly for forgetting and ask for Uzbek or Russian."""
 
 
@@ -987,6 +1106,7 @@ async def ai_live(request):
         await j({"t": "nolive"}); await ws.close(); return ws
     ses = get_session(info)
     persona = set_persona(ses, request.query.get("p"))
+    load_gender(info, ses, request.query.get("g"))
     dinfo = await day_info(info.get("d"), lg(info))
     humor = humor_level()
     ex = G.sample({0: 2, 1: 3, 2: 4, 3: 5}[humor], humor)
@@ -994,19 +1114,14 @@ async def ai_live(request):
     t0 = time.time()
     turns = []        # [("u"|"a", matn)]
     async with aiohttp.ClientSession() as http:
-        opened = await live_open(http, sysmsg, LIVE_VOICE_FRIENDLY if persona == "friendly" else LIVE_VOICE)
+        opened = await live_open(http, sysmsg, persona_voice(persona))
         if not opened:
             await j({"t": "nolive", "why": "; ".join("%s %s" % kv for kv in LAST_ERR.items())[:200]}); await ws.close(); return ws
         up, _k = opened
         again = bool(ses["hist"])
-        if persona == "friendly":
-            opener = ("(o'quvchi chatga qaytib keldi: sog'inganingni aytib, iliq va kulgili kutib ol, oldingi gapimizni eslat)" if again
-                      else "(o'quvchi endigina qo'ng'iroqni ochdi: 'jonim' deb iliq va kulgili salom ber, bugungi mavzuga ulab, bugun nechta gap yodlaganini so'ra)")
-        else:
-            opener = ("(o'quvchi chatga qaytib keldi: jahl bilan 'yana kech keldingmi' qabilida kutib ol, oldingi gapimizni eslat)" if again
-                      else "(o'quvchi endigina qo'ng'iroqni ochdi: jahldor ohangda salom ber, bugungi mavzuga ulab, bugun nechta gap yodlaganini so'ra)")
+        opener = opener_for(persona, again, ses)
         await up.send_str(json.dumps({"realtimeInput": {"text": opener}}))
-        await j({"t": "ready", "left": left0, "ptt": LIVE_PTT})
+        await j({"t": "ready", "left": left0, "ptt": LIVE_PTT, "g": ses.get("g") or ""})
         state = {"wrap": False, "cur_in": "", "cur_out": "", "talking": False, "talk_t0": 0.0, "user_s": 0.0, "ai_s": 0.0, "last": time.time()}
 
         def used_secs():
@@ -1078,6 +1193,10 @@ async def ai_live(request):
                         await flush_turn()
                     state["cur_in"] += it
                     await j({"t": "in", "text": it})
+                    if not ses.get("g"):
+                        gg = learn_gender(info, ses, state["cur_in"])
+                        if gg:
+                            await j({"t": "gender", "g": gg})
                 ot = (sc.get("outputTranscription") or {}).get("text")
                 if ot:
                     state["cur_out"] += ot
@@ -1157,12 +1276,12 @@ async def ai_start(request):
     except Exception:
         _body = {}
     set_persona(ses, _body.get("persona"))
+    load_gender(info, ses, _body.get("g"))
     want_live = bool(_body.get("live"))
     if want_live and LIVE_ON and keys("gemini"):      # jonli rejim: salomlashuvni Gemini Live o'zi aytadi
         return web.json_response({"live": True, "left": left, "topic": topic, "bot": BOT_URL})
     again = bool(ses["hist"])
-    opener = ("(o'quvchi chatga qaytib keldi — jahl bilan 'yana kech keldingmi' qabilida kutib ol, oldingi gapimizni eslat)" if again
-              else "(o'quvchi endigina chatni ochdi — jahldor ohangda salom ber va bugungi mavzuga ulab, bugun nechta gap yodlaganini so'ra)")
+    opener = opener_for(ses.get("persona", "friendly"), again, ses)
     try:
         async with gate:
             ru, uz, _fix, _w, emo = await reply_for(info, ses, dinfo, opener, left)
@@ -1212,6 +1331,7 @@ async def ai_turn(request):
     ctype = request.headers.get("Content-Type", "")
     ses = get_session(info)
     set_persona(ses, request.headers.get("X-Persona"))
+    load_gender(info, ses, request.headers.get("X-Gender"))
     dinfo = await day_info(info.get("d"), lg(info))
     t0 = time.time()
     resp = web.StreamResponse(headers={"Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
