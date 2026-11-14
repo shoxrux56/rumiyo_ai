@@ -458,7 +458,7 @@ PERSONAS = ("friendly", "angry", "fiery", "sweet")
 PICK_LOCK = int(float(os.getenv("PERSONA_LOCK_DAYS", "0")) * 86400)
 _VOICES = {
     ("m", "friendly"): "Puck", ("m", "angry"): "Charon", ("m", "fiery"): "Enceladus", ("m", "sweet"): "Achird",
-    ("f", "friendly"): "Zephyr", ("f", "angry"): "Kore", ("f", "fiery"): "Enceladus", ("f", "sweet"): "Sulafat",
+    ("f", "friendly"): "Zephyr", ("f", "angry"): "Kore", ("f", "fiery"): "Aoede", ("f", "sweet"): "Sulafat",
 }
 PERSONA_STYLE = {
     "friendly": {
@@ -687,6 +687,9 @@ RU: <ONLY the short Russian word/sentence to learn or repeat (max ~12 words), or
 FIX: <in Uzbek: if the learner's last Russian had a mistake, write "wrong -> correct" plus a very short friendly reason; otherwise just a dash ->
 EMO: <one word: happy (you laughed or are delighted), cry (you are moved to tears or joke-crying), or normal. Never angry>
 Also add one more line `Q: <Uzbek sentence> | <Russian sentence>` ONLY if you asked a quiz question in this reply."""
+    if live and ses.get("persona") == "fiery":
+        p = ("VOICE DIRECTIVE (overrides everything): from your very first word to the last, speak in a hushed, breathy, intimate WHISPER, as if whispering right into the learner's ear. "
+             "Very low volume, slow, soft, with audible breaths and sighs. Never use a normal speaking voice and never shout. Stay in this whisper even when excited.\n\n") + p
     if lg(info) == "en":
         p = to_en(p) + EN_ADDENDUM
     return p, nxt
