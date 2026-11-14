@@ -6,7 +6,7 @@
 - Kesh: ?v=5 (yangilanganda raqamni oshiring).
 
 --- Qo'l tegmasdan suhbat (hands-free) ---
-- Mikrofon o'zi ochiq (LIVE_PTT=0 default). Rumiyo gapirayotganda mikrofon eshitmaydi (eko bo'lmasin), tugagach o'zi yana eshitadi.
+- Standart: tugma bilan gapirish (LIVE_PTT=1): bosing, gapiring, yana bosing. Qo'l tegmasdan rejim: LIVE_PTT=0. Rumiyo gapirayotganda mikrofon eshitmaydi (eko bo'lmasin), tugagach o'zi yana eshitadi.
 - Mikrofon tugmasi: Rumiyo gapirayotganda bosilsa - to'xtatadi; jim paytda - mikrofonni o'chiradi/yoqadi.
 - Gap tugashi: LIVE_SILENCE_MS (1100), LIVE_PREFIX_MS (300). Eski tugmali rejim: LIVE_PTT=1.
 - Jins (o'g'il/qiz) HECH QACHON saqlanmaydi: har safar kirganda tanlanadi. Ustoz va xarakter saqlanadi, istalgan payt o'zgartiriladi.

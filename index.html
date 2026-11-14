@@ -660,8 +660,8 @@ var RumiyoAvatar = (function () {
   function micUI(mode) {   // on = mikrofon eshityapti, off = o'chiq, wait = ustoz gapiryapti
     var o = $("b-mic"); o.classList.toggle("rec", mode === "on"); o.classList.toggle("off", mode === "off"); o.classList.toggle("wait", mode === "wait");
     if (mode !== "on") o.style.setProperty("--lv", 0);
-    ms.hidden = false; ms.className = mode;
-    ms.lastChild.textContent = mode === "on" ? "MIKROFON YONIQ: gapiravering" : mode === "off" ? "MIKROFON O'CHIQ (bosib yoqing)" : "Ustoz gapiryapti, mikrofon kutmoqda";
+    ms.hidden = false; ms.className = mode === "idle" ? "off" : mode;
+    ms.lastChild.textContent = mode === "idle" ? "Mikrofon o'chiq: gapirish uchun tugmani bosing" : mode === "on" ? (live && live.ptt ? "MIKROFON YONIQ: gapiring, tugatgach yana bosing" : "MIKROFON YONIQ: gapiravering") : mode === "off" ? "MIKROFON O'CHIQ (bosib yoqing)" : "Ustoz gapiryapti, mikrofon kutmoqda";
   }
   function mkBubble(cls) { var d = document.createElement("div"); d.className = "m " + cls; $("log").appendChild(d); return d; }
   function livePlay(L, buf) {
@@ -695,12 +695,12 @@ var RumiyoAvatar = (function () {
     L.talking = true; L.talkAt = Date.now();
     try { L.ws.send(JSON.stringify({ t: "ptt", on: true })); } catch (e) {}
     (L.pre || []).forEach(function (b) { try { L.ws.send(b); } catch (e) {} }); L.pre = [];   // gapning boshi qirqilmasin
-    $("b-mic").classList.add("rec"); state("🎙 Gapiring… tugatgach tugmani yana bosing");
+    micUI("on"); state("Gapiring… tugatgach tugmani yana bosing");
     clearTimeout(L.maxT); L.maxT = setTimeout(function () { liveTalkOff(L); }, 28000);
   }
   function liveTalkOff(L) {
     if (!L.talking) return; L.talking = false; clearTimeout(L.maxT);
-    $("b-mic").classList.remove("rec"); state("Rumiyo eshityapti…");
+    micUI("idle"); $("b-mic").style.setProperty("--lv", 0); state("Rumiyo eshityapti…");
     L.talkTail = true;
     setTimeout(function () { L.talkTail = false; try { L.ws.send(JSON.stringify({ t: "ptt", on: false })); } catch (e) {} }, 400);   // oxirgi bo'g'in ham yetib borsin
   }
@@ -732,7 +732,7 @@ var RumiyoAvatar = (function () {
         if (!L.ptt && (L.srcs.length || Date.now() < (L.quiet || 0))) return;   // Rumiyo gapirayotganda mikrofon eshitmaydi (eko bo'lmasin)
         if (L.ptt && !L.talking && L.pre.length > 8) L.pre.shift();
         var f = e.inputBuffer.getChannelData(0), n = Math.floor(f.length / ratio), o = new Int16Array(n);
-        if (!L.ptt) { var sq = 0; for (var q = 0; q < f.length; q += 4) sq += f[q] * f[q]; $("b-mic").style.setProperty("--lv", Math.min(1, Math.sqrt(sq / (f.length / 4)) * 9).toFixed(2)); }
+        if (!L.ptt || L.talking) { var sq = 0; for (var q = 0; q < f.length; q += 4) sq += f[q] * f[q]; $("b-mic").style.setProperty("--lv", Math.min(1, Math.sqrt(sq / (f.length / 4)) * 9).toFixed(2)); }
         for (var i = 0; i < n; i++) {
           var a = Math.floor(i * ratio), b = Math.min(f.length, Math.floor((i + 1) * ratio)), sum = 0, c = 0;
           for (var k = a; k < b; k++) { sum += f[k]; c++; }
@@ -747,11 +747,11 @@ var RumiyoAvatar = (function () {
       if (L.closed) return;
       if (typeof e.data !== "string") { livePlay(L, e.data); return; }
       var o; try { o = JSON.parse(e.data); } catch (x) { return; }
-      if (o.t === "ready") { L.ready = true; L.ptt = o.ptt !== false; setLeft(o.left); $("b-mic").disabled = false; if (L.ptt) { state("Rumiyo salom beryapti… gapirmoqchi bo'lsangiz tugmani bosing"); } else { micUI("on"); state("Ovozingiz eshitilganda tugma atrofida yashil halqa chiqadi"); } }
+      if (o.t === "ready") { L.ready = true; L.ptt = o.ptt !== false; setLeft(o.left); $("b-mic").disabled = false; if (L.ptt) { micUI("idle"); state("Rumiyo salom beryapti… gapirmoqchi bo'lsangiz tugmani bosing"); } else { micUI("on"); state("Ovozingiz eshitilganda tugma atrofida yashil halqa chiqadi"); } }
       else if (o.t === "in") { if (!L.curMe) L.curMe = mkBubble("me"); L.curMe.textContent += o.text; L.curAi = null; $("log").scrollTop = 1e9; }
       else if (o.t === "out") { reactFrom(o.text); if (!L.curAi) L.curAi = mkBubble("ai"); L.curAi.textContent += o.text; L.curMe = null; $("log").scrollTop = 1e9; L.outText = (L.outText || "") + o.text; var mo = moodFrom(L.outText); if (mo !== "speak") L.mood = mo; if (L.srcs.length) setAv(L.mood || "speak"); }
       else if (o.t === "int") { liveStopPlay(L); L.curAi = null; }
-      else if (o.t === "turn") { L.curMe = null; L.curAi = null; L.outText = ""; L.mood = "speak"; if (L.ptt && !L.talking) state("Sizning navbatingiz: tugmani bosib gapiring 🎙"); }
+      else if (o.t === "turn") { L.curMe = null; L.curAi = null; L.outText = ""; L.mood = "speak"; if (L.ptt && !L.talking) { micUI("idle"); state("Sizning navbatingiz: tugmani bosib gapiring"); } }
       else if (o.t === "left") { setLeft(o.left); }
       else if (o.t === "nolive") { liveFail(); }
       else if (o.t === "error") { liveCleanup(); state(o.error || "Xatolik"); }
