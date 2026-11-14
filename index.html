@@ -39,7 +39,7 @@ h2{font-size:1.15rem}
 .btn{display:inline-block;border:0;border-radius:14px;padding:13px 22px;font:inherit;font-weight:600;background:var(--acc);color:#fff;text-decoration:none;cursor:pointer}
 .link{background:none;border:0;color:var(--mut);font:inherit;text-decoration:underline;cursor:pointer;padding:6px}
 .emoji{font-size:3rem}
-.av{width:min(64vw,280px);aspect-ratio:1;margin:0 auto;border-radius:26px;overflow:hidden;background:#2a0d12;flex:none;box-shadow:0 6px 24px rgba(0,0,0,.25);transition:box-shadow .3s}
+.av{width:min(64vw,280px);aspect-ratio:1;margin:0 auto;border-radius:26px;overflow:hidden;background:radial-gradient(circle at 50% 30%,#ffe3bf,#ffb36b);flex:none;box-shadow:0 6px 24px rgba(0,0,0,.25);transition:box-shadow .3s}
 .av svg{width:100%;height:100%;display:block}
 @keyframes avpop{0%{transform:scale(.3) rotate(-14deg);opacity:0}55%{transform:scale(1.14) rotate(5deg);opacity:1}75%{transform:scale(.96) rotate(-2deg)}100%{transform:scale(1) rotate(0)}}
 .av-pop{animation:avpop .85s cubic-bezier(.2,.9,.3,1.2) both}
@@ -52,7 +52,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 
 <section id="s-hello" class="scr hide">
   <div class="mid">
-    <div class="av" id="av-h"></div>
+    
     <h1>Rumiyo bilan gaplashamiz</h1>
     <p class="lead" id="h-topic">Bugungi darsni ruscha gaplashib mustahkamlaymiz. Mikrofonga ruxsat bering.</p>
     <button id="b-go" class="orb big" aria-label="Boshlash"><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
@@ -81,6 +81,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 </section>
 
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="vrm/rumiyo-vrm.js"></script>
 <script>
 /* Rumiyo avatari: jahldor ustoz (2D, SVG). Ko'z pirpiraydi, ko'zlar sichqoncha/barmoqni kuzatadi,
    og'iz ovoz balandligiga qarab ochiladi, jahl/kulgi/yig'i/xursandlik holatlari silliq o'tadi. */
@@ -306,7 +307,9 @@ var RumiyoAvatar = (function () {
   var mic = null, recorder = null, chunks = [], rec = false, busy = false, audio = null, tick = null, left = 0, ctx = null;
 
   function noMic(t, p) { $("msg-t").textContent = t; $("msg-p").textContent = p; show("s-msg"); }
-  function show(id) { ["s-msg", "s-hello", "s-chat", "s-end"].forEach(function (s) { $(s).classList.toggle("hide", s !== id); }); if (id === "s-chat") avC.enter(); if (id === "s-hello") avH.enter(); }
+  function show(id) { ["s-msg", "s-hello", "s-chat", "s-end"].forEach(function (s) { $(s).classList.toggle("hide", s !== id); }); var holder = $("av");
+    if (id === "s-hello") { var mid = $("s-hello").querySelector(".mid"); mid.insertBefore(holder, mid.firstChild); avC.enter(); }
+    else if (id === "s-chat") { $("s-chat").querySelector(".bar").insertAdjacentElement("afterend", holder); avC.enter(); } }
   function state(t) { $("state").textContent = t; }
   function fmt(s) { s = Math.max(0, s | 0); return Math.floor(s / 60) + ":" + ("0" + (s % 60)).slice(-2); }
   function setLeft(s) { left = s; $("left").textContent = fmt(s); }
@@ -398,7 +401,25 @@ var RumiyoAvatar = (function () {
   function stopMic() { if (mic) { mic.getTracks().forEach(function (t) { t.stop(); }); mic = null; } }
 
   // ---- avatar: 2D SVG ustoz; hissiyatga qarab yuzi o'zgaradi, og'zi ovozga mos ochiladi ----
-  var avCur = "", avC = RumiyoAvatar.create($("av")), avH = RumiyoAvatar.create($("av-h"));
+  // 3D VRM avatar (WebGL); qurilmada WebGL yoki model yuklanmasa, 2D SVG avatarga o'tadi
+  function makeAv(host) {
+    var cur = null, st = { emo: "idle", talking: false, ana: null };
+    function webgl() { try { var c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); } catch (e) { return false; } }
+    function useSvg() {
+      try { if (cur && cur.destroy) cur.destroy(); } catch (e) {}
+      host.innerHTML = ""; cur = RumiyoAvatar.create(host);
+      cur.set(st.emo); cur.talking(st.talking); cur.analyser(st.ana);
+    }
+    try {
+      if (!window.RumiyoVRM || !webgl()) throw 0;
+      cur = RumiyoVRM.create(host, { url: "vrm/rumiyo.vrm" }); cur.onFail(useSvg);
+    } catch (e) { useSvg(); }
+    return {
+      set: function (n) { st.emo = n; cur.set(n); }, talking: function (v) { st.talking = !!v; cur.talking(v); },
+      analyser: function (a) { st.ana = a || null; cur.analyser(a); }, enter: function () { cur.enter(); }
+    };
+  }
+  var avCur = "", avC = makeAv($("av")), avH = avC;
   avH.set("happy"); setTimeout(function () { avH.set("idle"); }, 1800);
   function setAv(n) {
     if (n === "angry_start") n = "angry";

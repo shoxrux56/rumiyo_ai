@@ -31,3 +31,10 @@ Avatar endi videolar emas, 2D SVG ustoz (index.html ichida): ko'z pirpiraydi, ko
 og'iz Rumiyo ovozi balandligiga qarab ochiladi, holatlar: idle, speak, angry (qizarish, bug', jahl belgisi), laugh, cry, happy.
 Jonli rejimda hissiyat Rumiyo aytgan matndan aniqlanadi (moodFrom funksiyasi). Avatarni bossangiz jahli chiqadi.
 media/*.mp4 endi ishlatilmaydi (o'chirsa bo'ladi).
+
+--- 3D avatar (VRM) ---
+vrm/rumiyo.vrm: pixiv Inc. namunasi "VRM1_Constraint_Twist_Sample" (https://github.com/pixiv/three-vrm), VRM 1.0 litsenziyasi:
+tijorat uchun ruxsat (commercialUsage: corporation), muallifni ko'rsatish shart emas, o'zgartirish va tarqatish mumkin.
+vrm/rumiyo-vrm.js: three.js + @pixiv/three-vrm (MIT) dan yig'ilgan bundle (manba: ishlab chiqish vaqtida esbuild bilan).
+Boshqa VRM model qo'yish: faylni vrm/rumiyo.vrm nomi bilan almashtiring (VRM 1.0 va aa/angry/happy/sad/blink ifodalari bo'lsa yetarli).
+WebGL yo'q yoki model yuklanmasa, avtomatik 2D SVG avatarga o'tadi.

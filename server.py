@@ -1345,6 +1345,9 @@ def add_routes(app, prefix=""):
     media = os.path.join(HERE, "media")
     if os.path.isdir(media):
         app.router.add_static(p + "/media", media)       # avatar videolari: idle, speak, angry, angry_start, cry, laugh
+    vrmdir = os.path.join(HERE, "vrm")
+    if os.path.isdir(vrmdir):
+        app.router.add_static(p + "/vrm", vrmdir)         # 3D avatar: rumiyo-vrm.js va rumiyo.vrm
     if p:
         async def to_slash(request):
             raise web.HTTPFound(p + "/" + ("?" + request.query_string if request.query_string else ""))
