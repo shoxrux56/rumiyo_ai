@@ -35,8 +35,8 @@ media/*.mp4 endi ishlatilmaydi (o'chirsa bo'ladi).
 --- Ustoz tanlash ---
 Salomlashuv ekrani 3 bosqich: 1) o'quvchi kimligi (o'g'il bola / qiz), 2) ustoz ko'rinishi (1 erkak, 2 ayol avatar),
 3) xarakter: Do'stona ("jonim"), Jahldor, Ehtirosli (olovli, "Ahh!" deb kuladi), Shirin so'z. Xarakterlar har qanday avatar bilan ishlaydi.
-Tanlov BIR MARTA qilinadi va serverda (sqlite `upick`) 7 kunga qulflanadi (PERSONA_LOCK_DAYS env, default 7; 0 = qulfsiz).
-Brauzer almashsa ham o'sha ustoz chiqadi (GET /ai/me). 7 kundan keyin "Ustozni o'zgartirish" tugmasi paydo bo'ladi.
+Ustozni xohlagan payt almashtirsa bo'ladi (PERSONA_LOCK_DAYS env, default 0 = qulfsiz).
+Brauzer almashsa ham o'sha ustoz chiqadi (GET /ai/me). "Ustozni o'zgartirish" tugmasi doim ko'rinadi.
 O'quvchi jinsi `ugender` jadvalida: murojaat (jonim/singlim...) va ruscha shakllar (сказал/сказала) shunga qarab.
 Ovozlar: LIVE_VOICE_<M|F>_<FRIENDLY|ANGRY|FIERY|SWEET> env bilan almashtiriladi (default: M: Puck/Charon/Fenrir/Achird, F: Zephyr/Kore/Autonoe/Sulafat).
 Mijoz tanlovni "avatar.xarakter" (masalan f1.fiery) ko'rinishida /ai/start, /ai/live?p=..&g=.. va /ai/turn (X-Persona, X-Gender) orqali yuboradi.
