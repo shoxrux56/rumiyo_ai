@@ -61,6 +61,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 .ac img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;display:block}
 .ac b{font-size:.82rem}
 .ac[aria-pressed=true]{border-color:var(--acc);box-shadow:0 0 0 3px rgba(232,89,12,.18);transform:translateY(-2px)}
+.av.body{width:auto;height:min(44vh,380px);aspect-ratio:3/4;border-radius:22px}
 .note{font-size:.78rem;color:var(--mut);margin:2px 0 0}
 [hidden]{display:none!important}
 </style>
@@ -104,7 +105,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 </section>
 
 <section id="s-chat" class="scr hide">
-  <div class="bar"><div><h2 id="c-name">Rumiyo</h2><div class="topic" id="c-topic"></div></div><span class="chip">Qoldi <b id="left">--:--</b></span></div>
+  <div class="bar"><div><h2 id="c-name">Rumiyo</h2><div class="topic" id="c-topic"></div></div><span style="display:flex;gap:8px;align-items:center"><button id="b-view" class="link" type="button" style="padding:2px 4px;font-size:.82rem"></button><span class="chip">Qoldi <b id="left">--:--</b></span></span></div>
   <div class="av" id="av"></div>
   <div id="log" class="log"></div>
   <div class="dock">
@@ -353,7 +354,8 @@ var RumiyoAvatar = (function () {
   function noMic(t, p) { $("msg-t").textContent = t; $("msg-p").textContent = p; show("s-msg"); }
   function show(id) { ["s-msg", "s-hello", "s-chat", "s-end"].forEach(function (s) { $(s).classList.toggle("hide", s !== id); }); var holder = $("av");
     if (id === "s-hello") { var mid = $("s-hello").querySelector(".mid"); mid.insertBefore(holder, mid.firstChild); avC.enter(); }
-    else if (id === "s-chat") { $("s-chat").querySelector(".bar").insertAdjacentElement("afterend", holder); avC.enter(); } }
+    else if (id === "s-chat") { $("s-chat").querySelector(".bar").insertAdjacentElement("afterend", holder); avC.enter(); }
+    applyView(id); }
   function state(t) { $("state").textContent = t; }
   function fmt(s) { s = Math.max(0, s | 0); return Math.floor(s / 60) + ":" + ("0" + (s % 60)).slice(-2); }
   function setLeft(s) { left = s; $("left").textContent = fmt(s); }
@@ -470,6 +472,7 @@ var RumiyoAvatar = (function () {
     return {
       set: function (n) { st.emo = n; cur.set(n); }, talking: function (v) { st.talking = !!v; cur.talking(v); },
       analyser: function (a) { st.ana = a || null; cur.analyser(a); }, enter: function () { cur.enter(); },
+      view: function (v) { if (cur.setView) { cur.setView(v); return true; } return false; },
       model: function (u, fr) { if (cur.setModel) { cur.friendly(fr); if (u !== curUrl) { curUrl = u; cur.setModel(u); } } }
     };
   }
@@ -521,6 +524,16 @@ var RumiyoAvatar = (function () {
     applyPick(false); helloMode(); saveLocal();
   }).catch(function () {});
   applyPick(false); helloMode();
+  // ko'rinish: suhbatda butun bo'y (qo'l ishoralari bilan), salomlashuvda yuz; tugma bilan almashtiriladi
+  var viewMode = "body";
+  try { var sv = localStorage.getItem("rumiyo_view"); if (sv === "face" || sv === "body") viewMode = sv; } catch (e) {}
+  function applyView(screen) {
+    var v = screen === "s-chat" ? viewMode : "face";
+    var ok = avC.view(v);
+    $("av").classList.toggle("body", ok && v === "body");
+    $("b-view").textContent = viewMode === "body" ? "🙂 Yuzni yaqin" : "🧍 Butun bo'y";
+  }
+  $("b-view").onclick = function () { viewMode = viewMode === "body" ? "face" : "body"; try { localStorage.setItem("rumiyo_view", viewMode); } catch (e) {} applyView("s-chat"); };
   function setAv(n) {
     if (n === "angry_start") n = "angry";
     if (soft()) { if (n === "speak") n = "warm"; else if (n === "angry") n = "happy"; }
