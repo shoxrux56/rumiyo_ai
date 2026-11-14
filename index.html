@@ -30,6 +30,16 @@ h2{font-size:1.15rem}
 .dock{display:flex;flex-direction:column;align-items:center;gap:8px}
 .orb{width:84px;height:84px;border-radius:50%;border:0;cursor:pointer;color:#fff;background:linear-gradient(135deg,var(--acc),var(--acc2));display:grid;place-items:center;box-shadow:0 6px 24px rgba(232,89,12,.35);transition:transform .15s}
 .orb:active{transform:scale(.95)}
+.orb{position:relative;--lv:0}
+.orb::after{content:"";position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 calc(var(--lv)*30px) rgba(46,204,113,.38);transition:box-shadow .08s;pointer-events:none}
+.orb.off{background:#6b7280!important;animation:none!important;box-shadow:none}
+.orb.off::before{content:"";position:absolute;left:18%;right:18%;top:50%;height:5px;border-radius:3px;background:#ff453a;transform:rotate(-40deg);box-shadow:0 0 0 2px #fff}
+.orb.wait{background:linear-gradient(135deg,#8b8fa3,#6b7280)!important;animation:none!important}
+#mstat{font-weight:700;font-size:.95rem;padding:6px 14px;border-radius:999px;background:rgba(255,255,255,.92);color:#222;display:inline-flex;align-items:center;gap:8px;margin:4px 0}
+#mstat i{width:12px;height:12px;border-radius:50%;background:#aaa;display:inline-block}
+#mstat.on i{background:#2ecc71;animation:pulse 1.1s infinite}#mstat.on{color:#157f43}
+#mstat.off i{background:#ff453a}#mstat.off{color:#c0281d}
+#mstat.wait i{background:#f5a623}#mstat.wait{color:#8a5a00}
 .orb.big{width:112px;height:112px}
 .orb.rec{animation:pulse 1.1s infinite;background:linear-gradient(135deg,#d6336c,var(--acc))}
 .orb:disabled{opacity:.5}
@@ -646,6 +656,13 @@ var RumiyoAvatar = (function () {
 
   // ---------- JONLI REJIM (Gemini Live): ovoz to'xtovsiz oqadi, gapirsangiz Rumiyo to'xtaydi ----------
   var live = null;
+  var ms = document.createElement("div"); ms.id = "mstat"; ms.hidden = true; ms.innerHTML = "<i></i><span></span>"; $("state").parentNode.insertBefore(ms, $("state"));
+  function micUI(mode) {   // on = mikrofon eshityapti, off = o'chiq, wait = ustoz gapiryapti
+    var o = $("b-mic"); o.classList.toggle("rec", mode === "on"); o.classList.toggle("off", mode === "off"); o.classList.toggle("wait", mode === "wait");
+    if (mode !== "on") o.style.setProperty("--lv", 0);
+    ms.hidden = false; ms.className = mode;
+    ms.lastChild.textContent = mode === "on" ? "MIKROFON YONIQ: gapiravering" : mode === "off" ? "MIKROFON O'CHIQ (bosib yoqing)" : "Ustoz gapiryapti, mikrofon kutmoqda";
+  }
   function mkBubble(cls) { var d = document.createElement("div"); d.className = "m " + cls; $("log").appendChild(d); return d; }
   function livePlay(L, buf) {
     if (buf.byteLength % 2) buf = buf.slice(0, buf.byteLength - 1);
@@ -654,8 +671,9 @@ var RumiyoAvatar = (function () {
     var ab = L.pctx.createBuffer(1, f.length, 24000); ab.copyToChannel(f, 0);
     var src = L.pctx.createBufferSource(); src.buffer = ab; src.connect(L.ana || L.pctx.destination);
     var t = Math.max(L.pctx.currentTime + 0.03, L.next); src.start(t); L.next = t + ab.duration;
-    L.srcs.push(src); setAv(L.mood || "speak");
-    src.onended = function () { var k = L.srcs.indexOf(src); if (k >= 0) L.srcs.splice(k, 1); if (!L.srcs.length) { setAv("idle"); L.quiet = Date.now() + 450; if (!L.ptt && !L.muted) state("🎙 Sizning navbatingiz: gapiravering"); } };
+    L.srcs.push(src); setAv(L.mood || "speak"); if (!L.ptt && !L.muted) micUI("wait");
+    try { if (L.pctx.state === "suspended") { L.pctx.resume(); state("Ovoz chiqmasa, ekranga bir marta tegining"); } } catch (e) {}
+    src.onended = function () { var k = L.srcs.indexOf(src); if (k >= 0) L.srcs.splice(k, 1); if (!L.srcs.length) { setAv("idle"); L.quiet = Date.now() + 450; if (!L.ptt && !L.muted) { micUI("on"); state("Sizning navbatingiz: gapiravering"); } } };
   }
   function liveStopPlay(L) { L.srcs.forEach(function (x) { try { x.stop(); } catch (e) {} }); L.srcs = []; L.next = 0; setAv("idle"); }
   function liveCleanup() {
@@ -689,9 +707,9 @@ var RumiyoAvatar = (function () {
   function liveMute() {
     var L = live; if (!L) return;
     if (!L.ptt) {      // qo'l tegmasdan rejim: bosish = Rumiyoni to'xtatish / mikrofonni o'chirib-yoqish
-      if (L.srcs.length) { liveStopPlay(L); L.quiet = Date.now() + 200; state("🎙 Eshityapman… gapiravering"); return; }
-      L.muted = !L.muted; $("b-mic").classList.toggle("rec", !L.muted);
-      state(L.muted ? "Mikrofon o'chiq. Yoqish uchun tugmani bosing" : "🎙 Eshityapman… gapiravering"); return;
+      if (L.srcs.length) { liveStopPlay(L); L.quiet = Date.now() + 200; micUI(L.muted ? "off" : "on"); state("Sizning navbatingiz: gapiravering"); return; }
+      L.muted = !L.muted; micUI(L.muted ? "off" : "on");
+      state(L.muted ? "Hech narsa eshitilmayapti. Yoqish uchun tugmani bosing" : "Gapiravering, men eshityapman"); return;
     }
     if (L.talking) liveTalkOff(L); else liveTalkOn(L);
   }
@@ -704,7 +722,7 @@ var RumiyoAvatar = (function () {
     var L = live = { ws: ws, ready: false, muted: false, talking: false, ptt: true, pre: [], next: 0, srcs: [], curMe: null, curAi: null, closed: false };
     state("Ulanyapman…"); $("b-mic").disabled = true;
     try {
-      L.pctx = new AC(); if (L.pctx.resume) L.pctx.resume();
+      L.pctx = window._pc || new AC(); if (L.pctx.resume) L.pctx.resume();
       try { L.ana = L.pctx.createAnalyser(); L.ana.fftSize = 512; L.ana.connect(L.pctx.destination); avC.analyser(L.ana); } catch (e) { L.ana = null; }
       L.cin = new AC(); if (L.cin.resume) L.cin.resume();
       var srcNode = L.cin.createMediaStreamSource(mic), ratio = L.cin.sampleRate / 16000;
@@ -714,6 +732,7 @@ var RumiyoAvatar = (function () {
         if (!L.ptt && (L.srcs.length || Date.now() < (L.quiet || 0))) return;   // Rumiyo gapirayotganda mikrofon eshitmaydi (eko bo'lmasin)
         if (L.ptt && !L.talking && L.pre.length > 8) L.pre.shift();
         var f = e.inputBuffer.getChannelData(0), n = Math.floor(f.length / ratio), o = new Int16Array(n);
+        if (!L.ptt) { var sq = 0; for (var q = 0; q < f.length; q += 4) sq += f[q] * f[q]; $("b-mic").style.setProperty("--lv", Math.min(1, Math.sqrt(sq / (f.length / 4)) * 9).toFixed(2)); }
         for (var i = 0; i < n; i++) {
           var a = Math.floor(i * ratio), b = Math.min(f.length, Math.floor((i + 1) * ratio)), sum = 0, c = 0;
           for (var k = a; k < b; k++) { sum += f[k]; c++; }
@@ -728,7 +747,7 @@ var RumiyoAvatar = (function () {
       if (L.closed) return;
       if (typeof e.data !== "string") { livePlay(L, e.data); return; }
       var o; try { o = JSON.parse(e.data); } catch (x) { return; }
-      if (o.t === "ready") { L.ready = true; L.ptt = o.ptt !== false; setLeft(o.left); $("b-mic").disabled = false; if (L.ptt) { state("Rumiyo salom beryapti… gapirmoqchi bo'lsangiz tugmani bosing"); } else { $("b-mic").classList.add("rec"); state("🎙 Eshityapman… gapiravering"); } }
+      if (o.t === "ready") { L.ready = true; L.ptt = o.ptt !== false; setLeft(o.left); $("b-mic").disabled = false; if (L.ptt) { state("Rumiyo salom beryapti… gapirmoqchi bo'lsangiz tugmani bosing"); } else { micUI("on"); state("Ovozingiz eshitilganda tugma atrofida yashil halqa chiqadi"); } }
       else if (o.t === "in") { if (!L.curMe) L.curMe = mkBubble("me"); L.curMe.textContent += o.text; L.curAi = null; $("log").scrollTop = 1e9; }
       else if (o.t === "out") { reactFrom(o.text); if (!L.curAi) L.curAi = mkBubble("ai"); L.curAi.textContent += o.text; L.curMe = null; $("log").scrollTop = 1e9; L.outText = (L.outText || "") + o.text; var mo = moodFrom(L.outText); if (mo !== "speak") L.mood = mo; if (L.srcs.length) setAv(L.mood || "speak"); }
       else if (o.t === "int") { liveStopPlay(L); L.curAi = null; }
@@ -743,6 +762,7 @@ var RumiyoAvatar = (function () {
   }
 
   function begin() {
+    try { var AC0 = window.AudioContext || window.webkitAudioContext; window._pc = new AC0(); window._pc.resume(); } catch (e) {}   // ovoz bosish paytida ochiladi (aks holda telefon bloklaydi)
     if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) || !window.MediaRecorder) {
       return noMic("Mikrofon bu yerda ishlamaydi", "Mikrofon ochilmadi. Qurilma sozlamasidan mikrofonga ruxsat bering.");
     }
@@ -867,6 +887,7 @@ var RumiyoAvatar = (function () {
 
   try { if (window.Telegram && Telegram.WebApp) { Telegram.WebApp.ready(); Telegram.WebApp.expand(); } } catch (e) {}
   $("b-go").onclick = begin;
+  document.addEventListener("pointerdown", function () { try { if (live && live.pctx && live.pctx.state === "suspended") live.pctx.resume(); } catch (e) {} }, true);
   // Jonli rejimda tugma darhol (bosilganda) ishlaydi: tez bossangiz - yoqiladi/o'chadi, bosib tursangiz - qo'yib yuborganda yuboriladi
   $("b-mic").addEventListener("pointerdown", function (e) {
     var L = live; if (!L || L.closed || !L.ready || !L.ptt) return;
@@ -881,6 +902,9 @@ var RumiyoAvatar = (function () {
   $("b-mic").addEventListener("pointerup", micRelease);
   $("b-mic").addEventListener("pointercancel", micRelease);
   $("b-mic").onclick = function () { if (live && !live.closed && live.ptt) return; micToggle(); };
+  $("e-bot").addEventListener("click", function (e) {
+    try { var tw = window.Telegram && Telegram.WebApp; if (tw) { e.preventDefault(); if (tw.openTelegramLink) tw.openTelegramLink(botUrl); setTimeout(function () { try { tw.close(); } catch (x) {} }, 250); } } catch (x) {}
+  });
   $("b-end").onclick = function () {
     if (live && !live.closed) { try { live.ws.send(JSON.stringify({ t: "end" })); } catch (e) {} var L0 = live; setTimeout(function () { if (!L0.closed) { liveCleanup(); finish({ cta: "Yaxshi gaplashdik! Botga qayting 👇" }); } }, 2500); return; }
     speaking = false; stopSpeak(); stopRec();
