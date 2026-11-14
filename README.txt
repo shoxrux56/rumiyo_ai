@@ -32,9 +32,16 @@ og'iz Rumiyo ovozi balandligiga qarab ochiladi, holatlar: idle, speak, angry (qi
 Jonli rejimda hissiyat Rumiyo aytgan matndan aniqlanadi (moodFrom funksiyasi). Avatarni bossangiz jahli chiqadi.
 media/*.mp4 endi ishlatilmaydi (o'chirsa bo'ladi).
 
+--- Ustoz tanlash (2 xil xarakter) ---
+Salomlashuv ekranida o'quvchi ustozni tanlaydi (tanlov brauzerda eslab qolinadi):
+  * Do'stona ustoz ("jonim" deb gaplashadi, iliq, hazilkash)  -> vrm/ustoz-jonim.vrm, ovoz: LIVE_VOICE_FRIENDLY (default Puck)
+  * Jahldor ustoz (jahli tez, kulgili)                          -> vrm/ustoz-jahldor.vrm, ovoz: LIVE_VOICE (default Charon)
+Mijoz tanlovni /ai/start (body.persona), /ai/live?p=... va /ai/turn (X-Persona) orqali yuboradi; server.py ichida
+persona_of / set_persona / build_friendly. Ustoz almashsa suhbat tarixi tozalanadi.
+
 --- 3D avatar (VRM) ---
-vrm/rumiyo.vrm: pixiv Inc. namunasi "VRM1_Constraint_Twist_Sample" (https://github.com/pixiv/three-vrm), VRM 1.0 litsenziyasi:
-tijorat uchun ruxsat (commercialUsage: corporation), muallifni ko'rsatish shart emas, o'zgartirish va tarqatish mumkin.
-vrm/rumiyo-vrm.js: three.js + @pixiv/three-vrm (MIT) dan yig'ilgan bundle (manba: ishlab chiqish vaqtida esbuild bilan).
-Boshqa VRM model qo'yish: faylni vrm/rumiyo.vrm nomi bilan almashtiring (VRM 1.0 va aa/angry/happy/sad/blink ifodalari bo'lsa yetarli).
+Ikkala model ham CC0 (tijorat uchun ruxsat), manba: github.com/madjin/vrm-samples
+  ustoz-jonim.vrm    = Sakurada_Fumiriya,  ustoz-jahldor.vrm = HairSample_Male (teksturalari kichraytirilgan).
+vrm/rumiyo-vrm.js: three.js + @pixiv/three-vrm (MIT) dan yig'ilgan bundle (esbuild).
+Boshqa VRM qo'yish: vrm/ustoz-*.vrm fayllarini almashtiring (aa/angry/happy/sad/relaxed/blink ifodalari bo'lsa yetarli).
 WebGL yo'q yoki model yuklanmasa, avtomatik 2D SVG avatarga o'tadi.

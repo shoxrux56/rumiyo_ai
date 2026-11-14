@@ -44,6 +44,14 @@ h2{font-size:1.15rem}
 @keyframes avpop{0%{transform:scale(.3) rotate(-14deg);opacity:0}55%{transform:scale(1.14) rotate(5deg);opacity:1}75%{transform:scale(.96) rotate(-2deg)}100%{transform:scale(1) rotate(0)}}
 .av-pop{animation:avpop .85s cubic-bezier(.2,.9,.3,1.2) both}
 body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
+.av.fr{background:radial-gradient(circle at 50% 30%,#e3f4ff,#9fd0ff)}
+.pick{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:380px}
+.pc{border:2px solid var(--line);background:var(--surf);color:inherit;border-radius:16px;padding:12px 10px;font:inherit;text-align:center;cursor:pointer;display:flex;flex-direction:column;gap:4px;align-items:center;transition:transform .15s,border-color .15s,box-shadow .15s}
+.pc b{font-size:1rem}
+.pc span{font-size:.8rem;color:var(--mut);line-height:1.25}
+.pc .e{font-size:1.6rem}
+.pc[aria-pressed=true]{border-color:var(--acc);box-shadow:0 0 0 3px rgba(232,89,12,.18);transform:translateY(-2px)}
+.pc.fr[aria-pressed=true]{border-color:#2f8fe0;box-shadow:0 0 0 3px rgba(47,143,224,.2)}
 </style>
 </head>
 <body>
@@ -53,7 +61,11 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 <section id="s-hello" class="scr hide">
   <div class="mid">
     
-    <h1>Rumiyo bilan gaplashamiz</h1>
+    <h1>Ustozingizni tanlang</h1>
+    <div class="pick" role="group" aria-label="Ustoz tanlash">
+      <button type="button" class="pc fr" id="pc-friendly" aria-pressed="false"><span class="e">😊</span><b>Do'stona ustoz</b><span>«Jonim» deb gaplashadi, hazil bilan o'rgatadi</span></button>
+      <button type="button" class="pc" id="pc-angry" aria-pressed="false"><span class="e">😠</span><b>Jahldor ustoz</b><span>Jahli tez, lekin juda kulgili</span></button>
+    </div>
     <p class="lead" id="h-topic">Bugungi darsni ruscha gaplashib mustahkamlaymiz. Mikrofonga ruxsat bering.</p>
     <button id="b-go" class="orb big" aria-label="Boshlash"><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
     <p class="state">Boshlash uchun bosing</p>
@@ -61,7 +73,7 @@ body.angry .av{box-shadow:0 0 44px rgba(255,40,40,.6)}
 </section>
 
 <section id="s-chat" class="scr hide">
-  <div class="bar"><div><h2>Rumiyo</h2><div class="topic" id="c-topic"></div></div><span class="chip">Qoldi <b id="left">--:--</b></span></div>
+  <div class="bar"><div><h2 id="c-name">Rumiyo</h2><div class="topic" id="c-topic"></div></div><span class="chip">Qoldi <b id="left">--:--</b></span></div>
   <div class="av" id="av"></div>
   <div id="log" class="log"></div>
   <div class="dock">
@@ -100,7 +112,8 @@ var RumiyoAvatar = (function () {
     angry: { brow: -1,   browY: 3,  smile: -0.85, eye: 0.7, flush: 1,    steam: 1, shake: 1, tears: 0, laugh: 0, happy: 0, bob: 0.2 },
     laugh: { brow: 0.45, browY: -5, smile: 1,    eye: 1,    flush: 0.3,  steam: 0, shake: 0, tears: 0.35, laugh: 1, happy: 0, bob: 1 },
     cry:   { brow: 1,    browY: -2, smile: -0.7, eye: 0.82, flush: 0.12, steam: 0, shake: 0.15, tears: 1, laugh: 0, happy: 0, bob: 0.2 },
-    happy: { brow: 0.5,  browY: -6, smile: 1,    eye: 1.08, flush: 0.1,  steam: 0, shake: 0, tears: 0, laugh: 0, happy: 1, bob: 0.6 }
+    happy: { brow: 0.5,  browY: -6, smile: 1,    eye: 1.08, flush: 0.1,  steam: 0, shake: 0, tears: 0, laugh: 0, happy: 1, bob: 0.6 },
+    warm:  { brow: 0.3,  browY: -3, smile: 0.7,  eye: 1.04, flush: 0.05, steam: 0, shake: 0, tears: 0, laugh: 0, happy: 0.5, bob: 0.35 }
   };
 
   function build(host) {
@@ -402,8 +415,14 @@ var RumiyoAvatar = (function () {
 
   // ---- avatar: 2D SVG ustoz; hissiyatga qarab yuzi o'zgaradi, og'zi ovozga mos ochiladi ----
   // 3D VRM avatar (WebGL); qurilmada WebGL yoki model yuklanmasa, 2D SVG avatarga o'tadi
+  var PERS = {
+    friendly: { vrm: "vrm/ustoz-jonim.vrm", name: "Do'stona ustoz" },
+    angry: { vrm: "vrm/ustoz-jahldor.vrm", name: "Jahldor ustoz" }
+  };
+  var persona = "friendly";
+  try { var sp = localStorage.getItem("rumiyo_persona"); if (sp === "angry" || sp === "friendly") persona = sp; } catch (e) {}
   function makeAv(host) {
-    var cur = null, st = { emo: "idle", talking: false, ana: null };
+    var cur = null, curUrl = "", st = { emo: "idle", talking: false, ana: null };
     function webgl() { try { var c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); } catch (e) { return false; } }
     function useSvg() {
       try { if (cur && cur.destroy) cur.destroy(); } catch (e) {}
@@ -412,20 +431,37 @@ var RumiyoAvatar = (function () {
     }
     try {
       if (!window.RumiyoVRM || !webgl()) throw 0;
-      cur = RumiyoVRM.create(host, { url: "vrm/rumiyo.vrm" }); cur.onFail(useSvg);
+      curUrl = PERS[persona].vrm; cur = RumiyoVRM.create(host, { url: curUrl }); cur.onFail(useSvg);
+      if (cur.friendly) cur.friendly(persona === "friendly");
     } catch (e) { useSvg(); }
     return {
       set: function (n) { st.emo = n; cur.set(n); }, talking: function (v) { st.talking = !!v; cur.talking(v); },
-      analyser: function (a) { st.ana = a || null; cur.analyser(a); }, enter: function () { cur.enter(); }
+      analyser: function (a) { st.ana = a || null; cur.analyser(a); }, enter: function () { cur.enter(); },
+      model: function (u, fr) { if (cur.setModel) { cur.friendly(fr); if (u !== curUrl) { curUrl = u; cur.setModel(u); } } }
     };
   }
   var avCur = "", avC = makeAv($("av")), avH = avC;
   avH.set("happy"); setTimeout(function () { avH.set("idle"); }, 1800);
+  function pickPersona(p, fromUser) {
+    persona = p === "angry" ? "angry" : "friendly";
+    try { if (fromUser) localStorage.setItem("rumiyo_persona", persona); } catch (e) {}
+    $("pc-friendly").setAttribute("aria-pressed", persona === "friendly");
+    $("pc-angry").setAttribute("aria-pressed", persona === "angry");
+    $("av").classList.toggle("fr", persona === "friendly");
+    $("c-name").textContent = PERS[persona].name;
+    document.body.classList.remove("angry"); avCur = "";
+    avC.model(PERS[persona].vrm, persona === "friendly");
+    if (fromUser) { avC.enter(); avC.set(persona === "friendly" ? "happy" : "angry"); setTimeout(function () { avC.set("idle"); }, 1400); }
+  }
+  $("pc-friendly").onclick = function () { pickPersona("friendly", true); };
+  $("pc-angry").onclick = function () { pickPersona("angry", true); };
+  pickPersona(persona, false);
   function setAv(n) {
     if (n === "angry_start") n = "angry";
+    if (persona === "friendly") { if (n === "speak") n = "warm"; else if (n === "angry") n = "happy"; }
     if (n === avCur) return; avCur = n;
     avC.set(n); avC.talking(n !== "idle");
-    document.body.classList.toggle("angry", n === "angry");
+    document.body.classList.toggle("angry", n === "angry" && persona !== "friendly");
   }
   function emoClip(e) { return e === "angry" ? "angry" : e === "cry" ? "cry" : e === "happy" ? "happy" : "speak"; }
   // jonli rejimda hissiyat Rumiyo aytgan matndan aniqlanadi
@@ -433,6 +469,7 @@ var RumiyoAvatar = (function () {
     if (/\b(h[ie]h|hi-?hi|ha-?ha|haha|ahaha|xa-?xa|xaxa)\b|kul(di|ma|ib|aman)/i.test(t)) return "laugh";
     if (/yig['\u2018\u2019`]?l(a|ab|ay)|voy onam|achinar/i.test(t)) return "cry";
     if (/barakalla|molodets|ofarin|to['\u2018\u2019`]?g['\u2018\u2019`]?ri aytding|yaxshi bo['\u2018\u2019`]?ldi|qoyil/i.test(t)) return "happy";
+    if (persona === "friendly") return "speak";
     if ((t.match(/!/g) || []).length >= 2 || /\b(hoy|eee+|ahmoq|patsan|necha marta|jahlim|bo['\u2018\u2019`]?ldi endi)\b/i.test(t)) return "angry";
     return "speak";
   }
@@ -455,7 +492,7 @@ var RumiyoAvatar = (function () {
   }
   function classicStart() {
     $("b-mic").classList.remove("rec"); $("b-mic").disabled = true; state("Rumiyo o'ylayapti…");
-    return post("ai/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token }) })
+    return post("ai/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token, persona: persona }) })
       .then(classicShow).catch(function () { state("Aloqa xatosi. Sahifani yangilang."); });
   }
 
@@ -509,7 +546,7 @@ var RumiyoAvatar = (function () {
     setLeft(j.left);
     var AC = window.AudioContext || window.webkitAudioContext, ws;
     var proto = location.protocol === "https:" ? "wss:" : "ws:", base = location.pathname.replace(/[^\/]*$/, "");
-    try { ws = new WebSocket(proto + "//" + location.host + base + "ai/live?t=" + encodeURIComponent(token)); } catch (e) { return classicStart(); }
+    try { ws = new WebSocket(proto + "//" + location.host + base + "ai/live?t=" + encodeURIComponent(token) + "&p=" + persona); } catch (e) { return classicStart(); }
     ws.binaryType = "arraybuffer";
     var L = live = { ws: ws, ready: false, muted: false, talking: false, ptt: true, pre: [], next: 0, srcs: [], curMe: null, curAi: null, closed: false };
     state("Ulanyapman…"); $("b-mic").disabled = true;
@@ -557,7 +594,7 @@ var RumiyoAvatar = (function () {
     }
     navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(function (s) {
       mic = s; $("log").innerHTML = ""; show("s-chat"); setAv("idle"); state("Rumiyo o'ylayapti…"); $("b-mic").disabled = true;
-      post("ai/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token, live: true }) }).then(function (j) {
+      post("ai/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token, live: true, persona: persona }) }).then(function (j) {
         if (j.done && !(j.ru || j.uz)) return finish(j);
         if (j.error) { state(j.error); return; }
         if (j.bot) botUrl = j.bot;
@@ -649,7 +686,7 @@ var RumiyoAvatar = (function () {
         qWhenDone(function () { if (myId !== spkId) return; if (qPlayed) speechEnded(o); else setTimeout(function () { if (myId === spkId) speechEnded(o); }, hold); });
       }
     }
-    fetch("ai/turn", { method: "POST", headers: { "X-Token": token, "X-Dur": String(dur), "Content-Type": (blob.type || "audio/webm").split(";")[0] }, body: blob, signal: ac ? ac.signal : undefined })
+    fetch("ai/turn", { method: "POST", headers: { "X-Token": token, "X-Persona": persona, "X-Dur": String(dur), "Content-Type": (blob.type || "audio/webm").split(";")[0] }, body: blob, signal: ac ? ac.signal : undefined })
       .then(function (r) {
         var ct = r.headers.get("Content-Type") || "";
         if (ct.indexOf("ndjson") < 0) clearTimeout(wd);

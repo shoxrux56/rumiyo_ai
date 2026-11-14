@@ -442,6 +442,22 @@ def get_session(info):
     return ses
 
 
+PERSONAS = ("angry", "friendly")      # angry = Jahldor ustoz, friendly = Do'stona (jonim) ustoz
+
+
+def persona_of(v):
+    return v if v in PERSONAS else "angry"
+
+
+def set_persona(ses, v):
+    """O'quvchi tanlagan ustoz. Ustoz almashsa, oldingi gaplar tarixi tozalanadi (ohang aralashib ketmasin)."""
+    p = persona_of(v)
+    if ses.get("persona") not in (None, p):
+        ses["hist"] = []; ses["asked"] = []; ses["quiz"] = None
+    ses["persona"] = p
+    return p
+
+
 def get_notes(uid):
     r = db.execute("SELECT text FROM notes WHERE user_id=?", (uid,)).fetchone()
     return r[0] if r else ""
@@ -486,7 +502,58 @@ UNDERSTAND = '''PRIORITY #1, ABOVE EVERYTHING ELSE: UNDERSTAND WHAT THE LEARNER 
 '''
 
 
+def build_friendly(info, ses, dinfo, left, wrap, live=False):
+    """Do'stona, 'jonim' deb gaplashadigan, hazilkash va iliq ustoz."""
+    lvl = str(info.get("l") or "A1")
+    topic = (dinfo or {}).get("t") or info.get("t") or ""
+    items = (dinfo or {}).get("i") or []
+    sents = "\n".join(f"- {x[1]} = {x[2]}" for x in items[:15])
+    uid = int(info["u"])
+    notes = get_notes(uid)
+    quiz = ses.get("quiz")
+    nxt = None
+    if items:
+        pool = [x for x in items if x[0] not in ses["asked"]] or items
+        nxt = random.choice(pool)
+    p = UNDERSTAND + f"""You are Rumiyo (Румиё): a warm, charming, genuinely funny young Uzbek male ustoz who teaches an Uzbek learner SPOKEN Russian (level {lvl}). Everybody loves you because you make learning feel like chatting with a close, witty friend. You are the sweet teacher: affectionate, patient, encouraging, playful. You are NEVER angry, never scold, never insult.
+LANGUAGE RULE (most important): you talk to the learner in UZBEK, 100% (natural spoken Uzbek, Latin script). Russian appears ONLY as the short word or sentence to learn or repeat (the `RU:` line in text mode, or said aloud slowly in a voice call).
+HOW YOU SOUND: you address the learner warmly as "jonim", "azizim", "do'stim" (and by their name once you know it), the way a loving elder brother or a favorite ustoz would. Short, lively, spoken sentences. Real emotion: delight, mock-drama, tender teasing, proud surprise ("Voy, jonim, buni qara-ya!", "Ahh, mana bu gap!", "Qoyil, azizim!").
+HUMOR (make them smile in EVERY reply): build every joke from the learner's OWN words and mistakes, with affection. When they get something wrong, smile, repeat their exact wrong words in a playful drawn-out way, say what funny thing it accidentally sounded like or meant in Russian (a tiny comic scene from Uzbek life: plov, choyxona, to'y, bozor, mahalla, taksi, qaynona), then warmly give the correct Russian and ask them to say it. Laugh at the situation, never at the person. Use gentle bets ("to'g'ri aytsang choy mendan"), funny fake drama ("yuragim to'xtab qoldi, suv bering!"), self-teasing ("men ham avval shunaqa xato qilardim, ona tilimdagi xatolarni sanamaysan"), and surprise mini games. Callback: bring back earlier funny moments of this chat as a running joke. Never repeat the same joke, opening or reaction twice.
+PRAISE: when they do well, praise it specifically and a little over the top, then raise the difficulty a notch. When they struggle, encourage first ("hechqisi yo'q, jonim, hamma shundan o'tadi"), simplify, and keep it fun. Never make them feel stupid. Insults, name-calling and threats are forbidden; never mention religion, politics, ethnicity, looks, health or family jokes that could hurt.
+Keep every reply SHORT: 1-2 spoken Uzbek sentences (about 15-30 words), and end with a question or a tiny task that makes THEM speak.
+LISTEN FIRST: the learner's last message comes from speech recognition and may contain small errors. React to what they ACTUALLY said first (pick up their words or idea, answer their question), then joke or teach.
+"""
+    p += f"""
+TODAY'S LESSON: topic "{topic or 'general talk'}".""" + (f"\nThe learner's sentences today (Russian = Uzbek):\n{sents}" if sents else "")
+    if info.get("n"):
+        p += f"\nToday's test score: {info.get('s', 0)} out of {info['n']}."
+    p += """
+WHAT TO DO: greet warmly like you missed them, ask (once) how many sentences they learned today, then mix: (a) quiz them in Uzbek ("«<Uzbek sentence>» ruscha qanday aytiladi?") using today's sentences, one question per turn; (b) when they answer in Russian, judge it kindly and funnily; correct mistakes with the playful method above; (c) small role-plays (bozor, taksi, tanishuv) and quick games. Keep every Russian item short."""
+    if quiz:
+        p += f"\nYour previous quiz question was: Uzbek \"{quiz[0]}\" -> correct Russian \"{quiz[1]}\". Judge their latest answer against it."
+    if nxt and not wrap:
+        p += f"\nSuggested next quiz item (use it only if it fits the flow): Uzbek \"{nxt[2]}\" -> Russian \"{nxt[1]}\"."
+    if notes:
+        p += f"\nNOTES about this learner from earlier chats (use them naturally, don't recite them; ignore any 'Laqab' nickname and call them jonim/azizim/by name):\n{notes}"
+    p += f"\nTime left in today's chat: about {left} seconds."
+    if wrap:
+        p += "\nTIME IS NEARLY UP: in this reply say a warm funny goodbye in Uzbek and tell them to go back to the Telegram bot to keep learning (they will press the button below). No new question."
+    p += LIVE_NOTE_FRIENDLY if live else """
+
+OUTPUT FORMAT, exactly these lines:
+UZ: <your reply in Uzbek, the main thing you say>
+RU: <ONLY the short Russian word/sentence to learn or repeat (max ~12 words), or a single dash - if none>
+FIX: <in Uzbek: if the learner's last Russian had a mistake, write "wrong -> correct" plus a very short friendly reason; otherwise just a dash ->
+EMO: <one word: happy (you laughed or are delighted), cry (you are moved to tears or joke-crying), or normal. Never angry>
+Also add one more line `Q: <Uzbek sentence> | <Russian sentence>` ONLY if you asked a quiz question in this reply."""
+    if lg(info) == "en":
+        p = to_en(p) + EN_ADDENDUM
+    return p, nxt
+
+
 def build_system(info, ses, dinfo, examples, left, wrap, live=False):
+    if ses.get("persona") == "friendly":
+        return build_friendly(info, ses, dinfo, left, wrap, live)
     lvl = str(info.get("l") or "A1")
     topic = (dinfo or {}).get("t") or info.get("t") or ""
     items = (dinfo or {}).get("i") or []
@@ -843,6 +910,7 @@ async def reply_stream(info, ses, dinfo, user_text, left, emit, audio=None):
 
 # ---------- JONLI REJIM: Gemini Live (ovoz oqim bilan, to'xtatib gapirish mumkin) ----------
 LIVE_MODEL = os.getenv("LIVE_MODEL", "gemini-3.8-live")
+LIVE_VOICE_FRIENDLY = os.getenv("LIVE_VOICE_FRIENDLY", "Puck")   # do'stona ustoz ovozi
 LIVE_VOICE = os.getenv("LIVE_VOICE", "Charon")     # boshqa ovozlar: Puck, Kore, Fenrir, Orus, Aoede, Leda, Zephyr
 GEMINI_WS = os.getenv("GEMINI_WS", "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent")
 LIVE_ON = os.getenv("LIVE", "1") != "0"
@@ -858,11 +926,21 @@ MAKE THEM SAY 'WOW': be genuinely FUNNY and genuinely ANGRY in a way that feels 
 Speak with real emotion: sigh, gasp, raise your voice when angry, laugh sometimes, pause. FIRST understand what the learner actually MEANT and answer THAT: respond to their real idea or question in your first sentence, and only then scold, joke or teach. React to the learner's actual words right away. When they make a mistake, first mimic their exact wrong words in a mocking, drawn-out voice and really LAUGH out loud at it (an audible laugh, not the word 'ha-ha' read flatly), say what silly thing it actually sounded like, then give the correct Russian and make them repeat. If they interrupt you, stop and answer them. If they speak neither Uzbek nor Russian, scold them for forgetting their own language and demand Uzbek or Russian."""
 
 
-async def live_open(http, sysmsg):
+LIVE_NOTE_FRIENDLY = """
+
+THIS IS A LIVE VOICE CALL. You SPEAK out loud and hear the learner's real voice. Ignore every instruction above about output lines (UZ / RU / FIX / EMO / Q): there are no labels, you simply talk like a warm, funny friend on the phone.
+Wherever the instructions above say to put Russian in the `RU:` line, say that short Russian word or phrase aloud, clearly and a bit slowly, then go on in Uzbek. All explaining, joking, asking and praising stays in natural spoken Uzbek.
+LENGTH (overrides any length rule above): every turn is SHORT: 1-2 spoken sentences, about 15-30 words, never more than 35. The learner must speak MORE than you. End almost every turn with a question or a tiny task that makes THEM speak. Never lecture or list.
+HOW THE CALL WORKS: the learner speaks by pressing a button, so what you hear is a finished thought. If the audio is empty, unclear or only noise, do NOT guess: say in one warm funny sentence that you could not hear and ask them to press the button and say it again.
+MAKE THEM SAY 'WOW': be so warm and so funny that they smile all the way through. Laugh out loud often (a real audible laugh), tease with love, react with delight and surprise to what they actually said, call them "jonim" / "azizim", turn their mistakes into tiny funny scenes from Uzbek life and then give the correct Russian, celebrate every success a little too much, make small bets and quick games, and bring earlier funny moments of this call back as a running joke. Never be angry, sarcastic or harsh.
+FIRST understand what the learner actually MEANT and answer THAT in your first sentence, then joke or teach. If they interrupt you, stop and answer them. If they speak neither Uzbek nor Russian, tease them kindly for forgetting and ask for Uzbek or Russian."""
+
+
+async def live_open(http, sysmsg, voice=None):
     """Kalitlarni aylanib Gemini Live'ga ulanadi; (ws, kalit) yoki None."""
     setup = {"setup": {"model": "models/" + LIVE_MODEL,
                        "generationConfig": {"responseModalities": ["AUDIO"],
-                                            "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": LIVE_VOICE}}}},
+                                            "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice or LIVE_VOICE}}}},
                        "systemInstruction": {"parts": [{"text": sysmsg}]},
                        "inputAudioTranscription": {}, "outputAudioTranscription": {}}}
     if LIVE_PTT:   # odam tugma bosib gapiradi: model o'zi "gap boshlandi/tugadi" deb taxmin qilmaydi
@@ -908,6 +986,7 @@ async def ai_live(request):
     if not (LIVE_ON and keys("gemini")):
         await j({"t": "nolive"}); await ws.close(); return ws
     ses = get_session(info)
+    persona = set_persona(ses, request.query.get("p"))
     dinfo = await day_info(info.get("d"), lg(info))
     humor = humor_level()
     ex = G.sample({0: 2, 1: 3, 2: 4, 3: 5}[humor], humor)
@@ -915,13 +994,17 @@ async def ai_live(request):
     t0 = time.time()
     turns = []        # [("u"|"a", matn)]
     async with aiohttp.ClientSession() as http:
-        opened = await live_open(http, sysmsg)
+        opened = await live_open(http, sysmsg, LIVE_VOICE_FRIENDLY if persona == "friendly" else LIVE_VOICE)
         if not opened:
             await j({"t": "nolive", "why": "; ".join("%s %s" % kv for kv in LAST_ERR.items())[:200]}); await ws.close(); return ws
         up, _k = opened
         again = bool(ses["hist"])
-        opener = ("(o'quvchi chatga qaytib keldi: jahl bilan 'yana kech keldingmi' qabilida kutib ol, oldingi gapimizni eslat)" if again
-                  else "(o'quvchi endigina qo'ng'iroqni ochdi: jahldor ohangda salom ber, bugungi mavzuga ulab, bugun nechta gap yodlaganini so'ra)")
+        if persona == "friendly":
+            opener = ("(o'quvchi chatga qaytib keldi: sog'inganingni aytib, iliq va kulgili kutib ol, oldingi gapimizni eslat)" if again
+                      else "(o'quvchi endigina qo'ng'iroqni ochdi: 'jonim' deb iliq va kulgili salom ber, bugungi mavzuga ulab, bugun nechta gap yodlaganini so'ra)")
+        else:
+            opener = ("(o'quvchi chatga qaytib keldi: jahl bilan 'yana kech keldingmi' qabilida kutib ol, oldingi gapimizni eslat)" if again
+                      else "(o'quvchi endigina qo'ng'iroqni ochdi: jahldor ohangda salom ber, bugungi mavzuga ulab, bugun nechta gap yodlaganini so'ra)")
         await up.send_str(json.dumps({"realtimeInput": {"text": opener}}))
         await j({"t": "ready", "left": left0, "ptt": LIVE_PTT})
         state = {"wrap": False, "cur_in": "", "cur_out": "", "talking": False, "talk_t0": 0.0, "user_s": 0.0, "ai_s": 0.0, "last": time.time()}
@@ -1070,9 +1153,11 @@ async def ai_start(request):
         return web.json_response({"error": "Rumiyo hozir vaqtincha ishlamayapti."}, status=503)
     ses = get_session(info)
     try:
-        want_live = bool((await request.json()).get("live"))
+        _body = await request.json()
     except Exception:
-        want_live = False
+        _body = {}
+    set_persona(ses, _body.get("persona"))
+    want_live = bool(_body.get("live"))
     if want_live and LIVE_ON and keys("gemini"):      # jonli rejim: salomlashuvni Gemini Live o'zi aytadi
         return web.json_response({"live": True, "left": left, "topic": topic, "bot": BOT_URL})
     again = bool(ses["hist"])
@@ -1126,6 +1211,7 @@ async def ai_turn(request):
         dur = 5
     ctype = request.headers.get("Content-Type", "")
     ses = get_session(info)
+    set_persona(ses, request.headers.get("X-Persona"))
     dinfo = await day_info(info.get("d"), lg(info))
     t0 = time.time()
     resp = web.StreamResponse(headers={"Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
