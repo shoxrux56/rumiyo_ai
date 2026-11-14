@@ -377,6 +377,7 @@ var RumiyoAvatar = (function () {
   var EN = false;   // havola ichidagi til: ingliz bo'lsa true (token = base64(json).imzo)
   try { var _b = token.split(".")[0].replace(/-/g, "+").replace(/_/g, "/"); EN = JSON.parse(decodeURIComponent(escape(atob(_b + "===".slice((_b.length + 3) % 4))))).g === "en"; } catch (e) {}
   var FLAG = EN ? "🇬🇧 " : "🇷🇺 ", LNAME = EN ? "inglizcha" : "ruscha";
+  try { var _bd = document.createElement("p"); _bd.className = "note"; _bd.style.margin = "2px 0 6px"; _bd.textContent = (EN ? "🇬🇧 Ingliz tili" : "🇷🇺 Rus tili") + " · tilni botdagi «🌐 Tilni almashtirish» tugmasi o'zgartiradi"; var _ht = document.getElementById("h-title"); _ht.parentNode.insertBefore(_bd, _ht.nextSibling); } catch (e) {}
   if (EN) { var _t = document.getElementById("h-topic"); if (_t) _t.textContent = "Bugungi darsni inglizcha gaplashib mustahkamlaymiz. Mikrofonga ruxsat bering."; }
   var botUrl = "https://t.me/rumiyo_bot";
   var mic = null, recorder = null, chunks = [], rec = false, busy = false, audio = null, tick = null, left = 0, ctx = null;
