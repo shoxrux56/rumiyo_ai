@@ -494,6 +494,7 @@ var RumiyoAvatar = (function () {
     return {
       set: function (n) { st.emo = n; cur.set(n); }, talking: function (v) { st.talking = !!v; cur.talking(v); },
       analyser: function (a) { st.ana = a || null; cur.analyser(a); }, enter: function () { cur.enter(); },
+      react: function (n) { if (cur.react) cur.react(n); },
       view: function (v) { if (cur.setView) { cur.setView(v); return true; } return false; },
       model: function (u, fr) { if (cur.setModel) { cur.friendly(fr); if (u !== curUrl) { curUrl = u; cur.setModel(u); } } }
     };
@@ -575,6 +576,16 @@ var RumiyoAvatar = (function () {
     $("capme").hidden = !stageOn() || !me; if (me) $("capme").textContent = "🎤 " + me.textContent;
   }
   try { new MutationObserver(syncCap).observe($("log"), { childList: true, subtree: true, characterData: true }); } catch (e) {}
+  // gap mazmuniga qarab ustoz harakati: salom/xayr -> qo'l silkitadi, savol -> boshini egadi, maqtov -> bosh irg'aydi, "voy" -> hayratlanadi
+  var lastReact = 0;
+  function reactFrom(t) {
+    var now = Date.now(); if (!t || now - lastReact < 2200) return;
+    var n = /\b(salom|assalom|privet|hello)\b|xayr|ko['\u2018\u2019`]?rishguncha|привет|здравствуй|до свидания/i.test(t) ? "wave"
+      : /\b(voy+|wow|oo+h*|ey|haa+)\b|!!/i.test(t) ? "surprise"
+      : /\b(to['\u2018\u2019`]?g['\u2018\u2019`]?ri|barakalla|zo['\u2018\u2019`]?r|molodets|qoyil|aynan|ofarin)\b|правильно|отлично/i.test(t) ? "nod"
+      : /\?/.test(t) ? "tilt" : "";
+    if (n) { lastReact = now; avC.react(n); }
+  }
   function setAv(n) {
     if (n === "angry_start") n = "angry";
     if (soft()) { if (n === "speak") n = "warm"; else if (n === "angry") n = "happy"; }
@@ -696,7 +707,7 @@ var RumiyoAvatar = (function () {
       if (o.t === "gender" || (o.t === "ready" && o.g)) { gender = o.g; try { localStorage.setItem("rumiyo_g", gender); } catch (e) {} }
       if (o.t === "ready") { L.ready = true; L.ptt = o.ptt !== false; setLeft(o.left); $("b-mic").disabled = false; if (L.ptt) { state("Rumiyo salom beryapti… gapirmoqchi bo'lsangiz tugmani bosing"); } else { $("b-mic").classList.add("rec"); state("Eshityapman… istagan payt gapiring, Rumiyo to'xtaydi"); } }
       else if (o.t === "in") { if (!L.curMe) L.curMe = mkBubble("me"); L.curMe.textContent += o.text; L.curAi = null; $("log").scrollTop = 1e9; }
-      else if (o.t === "out") { if (!L.curAi) L.curAi = mkBubble("ai"); L.curAi.textContent += o.text; L.curMe = null; $("log").scrollTop = 1e9; L.outText = (L.outText || "") + o.text; var mo = moodFrom(L.outText); if (mo !== "speak") L.mood = mo; if (L.srcs.length) setAv(L.mood || "speak"); }
+      else if (o.t === "out") { reactFrom(o.text); if (!L.curAi) L.curAi = mkBubble("ai"); L.curAi.textContent += o.text; L.curMe = null; $("log").scrollTop = 1e9; L.outText = (L.outText || "") + o.text; var mo = moodFrom(L.outText); if (mo !== "speak") L.mood = mo; if (L.srcs.length) setAv(L.mood || "speak"); }
       else if (o.t === "int") { liveStopPlay(L); L.curAi = null; }
       else if (o.t === "turn") { L.curMe = null; L.curAi = null; L.outText = ""; L.mood = "speak"; if (L.ptt && !L.talking) state("Sizning navbatingiz: tugmani bosib gapiring 🎙"); }
       else if (o.t === "left") { setLeft(o.left); }
@@ -799,7 +810,7 @@ var RumiyoAvatar = (function () {
         final = o;
         if (o.fix) log("fix", "✏️ " + o.fix);
         ensureBubble();
-        if (!spoke) { bubble.textContent = o.uz || ""; startSpeaking(o.emo); chunkText(o.uz).forEach(function (t) { qAdd(t, "uz", o.emo); }); }
+        if (!spoke) { bubble.textContent = o.uz || ""; startSpeaking(o.emo); reactFrom(o.uz); chunkText(o.uz).forEach(function (t) { qAdd(t, "uz", o.emo); }); }
         if (o.ru) { var b = document.createElement("b"); b.className = "ru"; b.textContent = FLAG + o.ru; bubble.appendChild(b); qAdd(o.ru, "ru", o.emo); }
         setLeft(o.left); setAv(emoClip(o.emo)); $("log").scrollTop = 1e9;
         var hold = Math.min(6000, 1200 + ((o.uz || "").length + (o.ru || "").length) * 60);

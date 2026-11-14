@@ -48,3 +48,9 @@ Hamma model CC0 (tijorat uchun ruxsat), manba: github.com/madjin/vrm-samples (VR
 vrm/rumiyo-vrm.js: three.js + @pixiv/three-vrm (MIT) dan yig'ilgan bundle (esbuild).
 Boshqa VRM qo'yish: vrm/ustoz-*.vrm fayllarini almashtiring (aa/angry/happy/sad/relaxed/blink ifodalari bo'lsa yetarli).
 WebGL yo'q yoki model yuklanmasa, avtomatik 2D SVG avatarga o'tadi.
+
+--- Ustoz gaplari (botdan) va animatsiya ---
+Bot admin: "AI ni o'qitish" ichida 😊 Do'stona / 🔥 Ehtirosli / 🍯 Shirin so'z gaplari tugmalari. Yozilgan gaplar (#dostona, #ehtiros, #shirin) shu xarakterdagi
+ustozning promptiga namuna sifatida qo'shiladi (yodlab takrorlamaydi, uslubini oladi). Jahldor ustoz uchun #jahl, #laqab, #qoida o'z holicha.
+Animatsiya: og'iz va qo'l ishoralari ovoz balandligiga qarab; hissiyat (kulgi/yig'i/maqtov) va harakatlar gap mazmuniga qarab:
+salom/xayr -> qo'l silkitadi, savol (?) -> boshini egadi, maqtov (to'g'ri, barakalla) -> bosh irg'aydi, "voy"/!! -> hayratlanadi (index.html: reactFrom, moodFrom).

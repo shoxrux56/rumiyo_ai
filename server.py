@@ -675,6 +675,12 @@ WHAT TO DO: greet warmly like you missed them, ask (once) how many sentences the
         p += f"\nSuggested next quiz item (use it only if it fits the flow): Uzbek \"{nxt[2]}\" -> Russian \"{nxt[1]}\"."
     if notes:
         p += f"\nNOTES about this learner from earlier chats (use them naturally, don't recite them; ignore any 'Laqab' nickname and use your affectionate address words or their name):\n{notes}"
+    kind = {"friendly": "#dostona", "fiery": "#ehtiros", "sweet": "#shirin"}.get(ses.get("persona"))
+    lines = G.special(kind) if kind else []
+    if lines:
+        lines = random.sample(lines, min(8, len(lines)))
+        p += ("\nOWNER'S SAMPLE LINES in YOUR character's voice (Uzbek). Take their style, tone and vocabulary; pick the one that fits what the learner just did, adapt or mix it, add your own in the same spirit; "
+              "never recite one word for word and never the same one twice in a row:\n" + "\n".join("- " + r[:200] for r in lines) + "\n")
     p += gender_block(ses)
     p += f"\nTime left in today's chat: about {left} seconds."
     if wrap:
