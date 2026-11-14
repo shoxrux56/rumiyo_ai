@@ -33,7 +33,7 @@ h2{font-size:1.15rem}
 .orb{position:relative;--lv:0}
 .orb::after{content:"";position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 calc(var(--lv)*30px) rgba(46,204,113,.38);transition:box-shadow .08s;pointer-events:none}
 .orb.off{background:#6b7280!important;animation:none!important;box-shadow:none}
-.orb.off::before{content:"";position:absolute;left:18%;right:18%;top:50%;height:5px;border-radius:3px;background:#ff453a;transform:rotate(-40deg);box-shadow:0 0 0 2px #fff}
+.orb.off::before,.orb.wait::before{content:"";position:absolute;left:18%;right:18%;top:50%;height:5px;border-radius:3px;background:#ff453a;transform:rotate(-40deg);box-shadow:0 0 0 2px #fff}
 .orb.wait{background:linear-gradient(135deg,#8b8fa3,#6b7280)!important;animation:none!important}
 #mstat{font-weight:700;font-size:.95rem;padding:6px 14px;border-radius:999px;background:rgba(255,255,255,.92);color:#222;display:inline-flex;align-items:center;gap:8px;margin:4px 0}
 #mstat i{width:12px;height:12px;border-radius:50%;background:#aaa;display:inline-block}
@@ -661,7 +661,7 @@ var RumiyoAvatar = (function () {
     var o = $("b-mic"); o.classList.toggle("rec", mode === "on"); o.classList.toggle("off", mode === "off"); o.classList.toggle("wait", mode === "wait");
     if (mode !== "on") o.style.setProperty("--lv", 0);
     ms.hidden = false; ms.className = mode === "idle" ? "off" : mode;
-    ms.lastChild.textContent = mode === "idle" ? "Mikrofon o'chiq: gapirish uchun tugmani bosing" : mode === "on" ? (live && live.ptt ? "MIKROFON YONIQ: gapiring, tugatgach yana bosing" : "MIKROFON YONIQ: gapiravering") : mode === "off" ? "MIKROFON O'CHIQ (bosib yoqing)" : "Ustoz gapiryapti, mikrofon kutmoqda";
+    ms.lastChild.textContent = mode === "idle" ? "Mikrofon o'chiq: gapirish uchun tugmani bosing" : mode === "on" ? (live && live.ptt ? "MIKROFON YONIQ: gapiring, tugatgach yana bosing" : "MIKROFON YONIQ: gapiravering") : mode === "off" ? "MIKROFON O'CHIQ (bosib yoqing)" : "Ustoz gapiryapti: mikrofon yopiq, tugagach o'zi ochiladi";
   }
   function mkBubble(cls) { var d = document.createElement("div"); d.className = "m " + cls; $("log").appendChild(d); return d; }
   function livePlay(L, buf) {
