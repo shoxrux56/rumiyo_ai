@@ -3,3 +3,6 @@ __pycache__/
 .env
 keys.json
 *.db
+
+*.db-shm
+*.db-wal
