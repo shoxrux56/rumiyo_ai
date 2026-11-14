@@ -86,6 +86,14 @@ body.stage .avimg{margin-top:128px;max-height:60vh}
 .cap .m .ru{color:#d9480f}
 .capme{align-self:flex-end;max-width:85%;background:rgba(0,0,0,.45);color:#fff;border-radius:99px;padding:4px 14px;font-size:.85rem}
 body.stage{background:#111}
+body.stage .bar .topic{display:none}
+body.stage .bar h2{font-size:.95rem;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw}
+body.stage .bar{padding-bottom:10px!important}
+body.stage .bar .link{font-size:.8rem;padding:2px 4px}
+body.stage .bar .chip{font-size:.78rem;padding:3px 9px}
+body.stage .cap{margin-top:2px;padding:12px 14px 8px;font-size:.98rem;margin-top:14px}
+body.stage #cap-t{max-height:calc(30vh - 24px);overflow-y:auto}
+body.stage .dock .state{font-size:.78rem;padding:2px 10px;margin:0}
 body.stage .av{position:fixed!important;inset:0;width:auto;height:auto;aspect-ratio:auto;margin:0;border-radius:0;box-shadow:none;z-index:0}
 body.stage .av.av-pop{animation:none}
 body.stage #s-chat>*:not(.av){position:relative;z-index:2}
@@ -583,7 +591,7 @@ var RumiyoAvatar = (function () {
     var ok = avC.view(v);
     $("av").classList.toggle("body", ok && v === "body");
     document.body.classList.toggle("stage", chat && viewMode === "stage");
-    $("b-view").textContent = viewMode === "stage" ? "🪟 Kichik" : "🎬 To'liq ekran";
+    $("b-view").textContent = viewMode === "stage" ? "🪟" : "🎬"; $("b-view").title = viewMode === "stage" ? "Kichik ko'rinish" : "To'liq ekran";
     $("b-hist").hidden = !(chat && viewMode === "stage");
     $("cap").style.setProperty("--capc", CAPC[P.c] || "#e8590c"); $("cap-tag").textContent = tname();
     syncCap();
