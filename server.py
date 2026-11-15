@@ -479,7 +479,7 @@ PERSONA_STYLE = {
         "trait": "sweet, soft-spoken, gracious, honey-voiced",
         "role": "You are the sweet teacher: gentle, soothing, endlessly kind, with a honeyed way of speaking and lovely compliments. Learners feel calm, safe and appreciated with you. You are NEVER harsh, never scold, never insult, never romantic.",
         "sound": "you speak softly and sweetly, in pretty melodic Uzbek, with tender words and caring compliments (\"Ohh, qanday chiroyli aytdingiz!\", \"Sizga bu juda yarashadi!\", \"Hechqisi yo'q, birga qaytaramiz\"). Your humor is gentle and cute: giggles, sweet little jokes, playful 'oy-oy' reactions. Address the learner as described in ADDRESSING below.",
-        "boy": "jonim, ukajonim, azizim, aziz do'stim", "girl": "jonginam, singlijonim, azizam, shirinim",
+        "boy": "asalim, shakarim, novvotim, shirintoyim, erkatoyim, erkacham, do'mboqcham, quyoncham, mushukcham, jonim", "girl": "asalim, shakarim, novvotim, shirintoyim, erkatoyim, erkacham, do'mboqcham, quyoncham, mushukcham, jonginam",
         "live": "Stay soft, sweet and honeyed, with gentle giggles; never raise the intensity.",
     },
 }
@@ -1155,6 +1155,10 @@ async def ai_live(request):
     humor = humor_level()
     ex = G.sample({0: 2, 1: 3, 2: 4, 3: 5}[humor], humor)
     sysmsg, _nxt = build_system(info, ses, dinfo, ex, left0, False, live=True)
+    np_clip = request.query.get("np") == "1"          # salomlashuv tayyor ovoz yozuvi bilan allaqachon aytilgan
+    if np_clip:
+        sysmsg += ("\n\nIMPORTANT: the opening greeting was ALREADY played to the learner as a short pre-recorded whisper (a warm hello and an invitation to begin). "
+                   "Do NOT greet again and do not speak first: stay silent and wait; when the learner speaks, answer them directly, continuing naturally from that greeting.")
     t0 = time.time()
     turns = []        # [("u"|"a", matn)]
     async with aiohttp.ClientSession() as http:
@@ -1164,7 +1168,8 @@ async def ai_live(request):
         up, _k = opened
         again = bool(ses["hist"])
         opener = opener_for(persona, again, ses)
-        await up.send_str(json.dumps({"realtimeInput": {"text": opener}}))
+        if not np_clip:
+            await up.send_str(json.dumps({"realtimeInput": {"text": opener}}))
         await j({"t": "ready", "left": left0, "ptt": LIVE_PTT, "g": ses.get("g") or ""})
         state = {"wrap": False, "cur_in": "", "cur_out": "", "talking": False, "talk_t0": 0.0, "user_s": 0.0, "ai_s": 0.0, "last": time.time()}
 
@@ -1197,6 +1202,8 @@ async def ai_live(request):
                         continue
                     if o.get("t") == "end":
                         return
+                    if o.get("t") == "opener" and np_clip:      # tayyor yozuv yuklanmadi: ustoz o'zi salom beradi
+                        await up.send_str(json.dumps({"realtimeInput": {"text": opener}}))
                     if o.get("t") == "ptt" and LIVE_PTT:
                         state["last"] = time.time()
                         if o.get("on") and not state["talking"]:
@@ -1623,6 +1630,9 @@ def add_routes(app, prefix=""):
     vrmdir = os.path.join(HERE, "vrm")
     if os.path.isdir(vrmdir):
         app.router.add_static(p + "/vrm", vrmdir)         # 3D avatar: rumiyo-vrm.js va rumiyo.vrm
+    clipdir = os.path.join(HERE, "clips")
+    if os.path.isdir(clipdir):
+        app.router.add_static(p + "/clips", clipdir)      # tayyor ovozli salomlashuvlar (tools/make_clips.py yaratadi)
     if p:
         async def to_slash(request):
             raise web.HTTPFound(p + "/" + ("?" + request.query_string if request.query_string else ""))

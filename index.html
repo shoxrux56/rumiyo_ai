@@ -742,11 +742,33 @@ var RumiyoAvatar = (function () {
     }
     if (L.talking) liveTalkOff(L); else liveTalkOn(L);
   }
+  // Tayyor ovozli salomlashuv (kechikishni yo'qotadi): clips/manifest.json bo'lsa va ehtirosli/shirin ustoz tanlangan bo'lsa
+  var CLIPS = null;
+  try { fetch("clips/manifest.json?x=" + Date.now()).then(function (r) { return r.ok ? r.json() : null; }).then(function (m) { CLIPS = m; }).catch(function () {}); } catch (e) {}
+  function pickClip() {
+    try {
+      if (!CLIPS || !P || (P.c !== "fiery" && P.c !== "sweet")) return null;
+      var arr = CLIPS[P.c + "." + (AV[P.a] && AV[P.a].s === "m" ? "m" : "f")];
+      return arr && arr.length ? arr[Math.floor(Math.random() * arr.length)] : null;
+    } catch (e) { return null; }
+  }
+  function playClip(L, ab, text) {
+    try {
+      var src = L.pctx.createBufferSource(); src.buffer = ab;
+      if (P && P.c === "fiery") src.connect(velvetFx(L)); else src.connect(L.ana || L.pctx.destination);
+      var t = Math.max(L.pctx.currentTime + 0.03, L.next); src.start(t); L.next = t + ab.duration;
+      L.srcs.push(src); setAv("speak"); if (!L.ptt && !L.muted) micUI("wait");
+      aiLog({uz: String(text || "").replace(/(\S)-(?=\S)/g, "$1")});
+      src.onended = function () { var k = L.srcs.indexOf(src); if (k >= 0) L.srcs.splice(k, 1); if (!L.srcs.length) { setAv("idle"); L.quiet = Date.now() + 450; if (!L.ptt && !L.muted) { micUI("on"); state("Sizning navbatingiz: gapiravering"); } else if (L.ptt) { micUI("idle"); state("Sizning navbatingiz: tugmani bosib gapiring"); } } };
+    } catch (e) { L.clipFail = true; }
+  }
   function liveStart(j) {
     setLeft(j.left);
     var AC = window.AudioContext || window.webkitAudioContext, ws;
     var proto = location.protocol === "https:" ? "wss:" : "ws:", base = location.pathname.replace(/[^\/]*$/, "");
-    try { ws = new WebSocket(proto + "//" + location.host + base + "ai/live?t=" + encodeURIComponent(token) + "&p=" + persona + "&g=" + gender); } catch (e) { return classicStart(); }
+    var clip = pickClip(), clipP = null;
+    if (clip) clipP = fetch("clips/" + clip.file).then(function (r) { if (!r.ok) throw 0; return r.arrayBuffer(); }).catch(function () { return null; });
+    try { ws = new WebSocket(proto + "//" + location.host + base + "ai/live?t=" + encodeURIComponent(token) + "&p=" + persona + "&g=" + gender + (clip ? "&np=1" : "")); } catch (e) { return classicStart(); }
     ws.binaryType = "arraybuffer";
     var L = live = { ws: ws, ready: false, muted: false, talking: false, ptt: true, pre: [], next: 0, srcs: [], curMe: null, curAi: null, closed: false };
     state("Ulanyapman…"); $("b-mic").disabled = true;
@@ -776,6 +798,13 @@ var RumiyoAvatar = (function () {
       if (L.closed) return;
       if (typeof e.data !== "string") { livePlay(L, e.data); return; }
       var o; try { o = JSON.parse(e.data); } catch (x) { return; }
+      if (o.t === "ready" && clip && clipP) {   // tayyor salomlashuvni darrov chalamiz
+        clipP.then(function (buf) {
+          var bad = function () { try { ws.send(JSON.stringify({t: "opener"})); } catch (e) {} };
+          if (!buf || L.closed) return bad();
+          L.pctx.decodeAudioData(buf, function (ab) { playClip(L, ab, clip.text); if (L.clipFail) bad(); }, bad);
+        });
+      }
       if (o.t === "ready") { L.ready = true; L.ptt = o.ptt !== false; setLeft(o.left); $("b-mic").disabled = false; if (L.ptt) { micUI("idle"); state("Rumiyo salom beryapti… gapirmoqchi bo'lsangiz tugmani bosing"); } else { micUI("on"); state("Ovozingiz eshitilganda tugma atrofida yashil halqa chiqadi"); } }
       else if (o.t === "in") { if (!L.curMe) L.curMe = mkBubble("me"); L.curMe.textContent += o.text; L.curAi = null; $("log").scrollTop = 1e9; }
       else if (o.t === "out") { reactFrom(o.text); if (!L.curAi) L.curAi = mkBubble("ai"); L.curAi.textContent += o.text; L.curMe = null; $("log").scrollTop = 1e9; L.outText = (L.outText || "") + o.text; var mo = moodFrom(L.outText); if (mo !== "speak") L.mood = mo; if (L.srcs.length) setAv(L.mood || "speak"); }

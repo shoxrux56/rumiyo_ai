@@ -11,3 +11,9 @@
 - Gap tugashi: LIVE_SILENCE_MS (1100), LIVE_PREFIX_MS (300). Eski tugmali rejim: LIVE_PTT=1.
 - Jins (o'g'il/qiz) HECH QACHON saqlanmaydi: har safar kirganda tanlanadi. Ustoz va xarakter saqlanadi, istalgan payt o'zgartiriladi.
 - 3D ishlamasa: ustozning rasmi ko'rsatiladi; "yengil rejim" endi saqlanmaydi.
+
+--- Tayyor ovozli salomlashuvlar (kechikishni kamaytiradi) ---
+- clips_phrases.json: gaplar ro'yxati (ehtirosli va shirin ustoz). tools/make_clips.py ularni Gemini TTS bilan ovozga aylantiradi (clips/).
+- Sayt kirganda tayyor yozuvni darrov chaladi, ustoz esa jim turib, siz gapirishingizni kutadi (&np=1).
+- Yozuv topilmasa yoki chalinmasa, ustoz avvalgidek o'zi salom beradi.
+- Yangi gap qo'shish: clips_phrases.json ga yozing va skriptni qayta ishga tushiring (faqat yangilari yaratiladi).
