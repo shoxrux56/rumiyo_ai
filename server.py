@@ -8,7 +8,7 @@ Hazil/pichinglar bazasi (gaplar_db.py) botdagi adminning "AI ni o'qitish" tugmas
 Kalitlar FAQAT muhit o'zgaruvchilarida (Render -> Environment), kodga yoki GitHubga yozilmaydi:
   TALK_SECRET (botdagi bilan bir xil), GROQ_API_KEYS (vergul bilan), OPENROUTER_API_KEY, GEMINI_API_KEY
 """
-import asyncio, base64, difflib, hashlib, hmac, json, os, random, re, sqlite3, time
+import asyncio, io, wave, base64, difflib, hashlib, hmac, json, os, random, re, sqlite3, time
 from datetime import datetime, timedelta, timezone
 
 import aiohttp
@@ -1129,6 +1129,91 @@ async def live_open(http, sysmsg, voice=None):
     return None
 
 
+# ---------- Tayyor ovozli salomlashuvlar: birinchi kirgan odamdan keyin server o'zi yaratadi va saqlaydi ----------
+CLIP_DIR = os.path.join(HERE, "clips")
+CLIP_GEN = set()           # hozir yaratilayotgan (xarakter, jins)
+CLIP_TTS = os.getenv("TTS_MODEL", "gemini-2.5-flash-preview-tts")
+
+
+def clip_manifest():
+    try:
+        with open(os.path.join(CLIP_DIR, "manifest.json"), encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def clip_save_manifest(m):
+    os.makedirs(CLIP_DIR, exist_ok=True)
+    tmp = os.path.join(CLIP_DIR, "manifest.json.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(m, f, ensure_ascii=False)
+    os.replace(tmp, os.path.join(CLIP_DIR, "manifest.json"))
+
+
+async def ensure_clips(char, sex):
+    """Ehtirosli/shirin ustoz uchun tayyor salomlashuvlarni (Gemini TTS) bir marta yaratadi. Birinchi kirgan odam odatdagidek eshitadi,
+    keyingilar tayyor yozuvni darrov eshitadi."""
+    key = "%s.%s" % (char, sex)
+    if char not in ("fiery", "sweet") or sex not in ("m", "f") or key in CLIP_GEN:
+        return
+    try:
+        data = json.load(open(os.path.join(HERE, "clips_phrases.json"), encoding="utf-8"))
+        lines = data["openers"].get(char) or []
+        style = data["styles"].get(char, "")
+    except Exception:
+        return
+    man = clip_manifest()
+    have = {b["text"] for b in man.get(key, [])}
+    todo = [t for t in lines if t not in have]
+    if not todo or not keys("gemini"):
+        return
+    CLIP_GEN.add(key)
+    try:
+        os.makedirs(CLIP_DIR, exist_ok=True)
+        voice = persona_voice(sex, char)
+        async with aiohttp.ClientSession() as http:
+            for text in todo:
+                pcm = None
+                for k in rotated("gemini"):
+                    url = "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s" % (CLIP_TTS, k)
+                    body = {"contents": [{"parts": [{"text": style + '"' + text + '"'}]}],
+                            "generationConfig": {"responseModalities": ["AUDIO"],
+                                                 "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}}}}
+                    try:
+                        st, js = await post(http, url, json=body)
+                    except Exception:
+                        continue
+                    try:
+                        pcm = base64.b64decode(js["candidates"][0]["content"]["parts"][0]["inlineData"]["data"])
+                    except Exception:
+                        pcm = None
+                    if st == 200 and pcm:
+                        break
+                    key_bad[k] = time.time()
+                if not pcm:
+                    break          # kalitlar yo'q/limit: keyingi kirishda qayta urinadi
+                name = "open_%s_%s_%s.wav" % (char, sex, hashlib.md5(text.encode()).hexdigest()[:8])
+                buf = io.BytesIO()
+                with wave.open(buf, "wb") as w:
+                    w.setnchannels(1); w.setsampwidth(2); w.setframerate(24000); w.writeframes(pcm)
+                with open(os.path.join(CLIP_DIR, name), "wb") as f:
+                    f.write(buf.getvalue())
+                man = clip_manifest()
+                man.setdefault(key, []).append({"file": name, "text": text})
+                clip_save_manifest(man)
+                await asyncio.sleep(1.5)
+    except Exception as e:
+        print("clip gen:", repr(e)[:160])
+    finally:
+        CLIP_GEN.discard(key)
+
+
+async def clips_manifest_view(request):
+    return web.json_response(clip_manifest(), headers={"Cache-Control": "no-store"})
+
+
+
 async def ai_live(request):
     ws = web.WebSocketResponse(max_msg_size=1 << 20, heartbeat=25)
     await ws.prepare(request)
@@ -1151,6 +1236,8 @@ async def ai_live(request):
     ses = get_session(info)
     persona = set_persona(info, ses, request.query.get("p"), request.query.get("g"))
     load_gender(info, ses, request.query.get("g"))
+    if persona in ("fiery", "sweet") and ses.get("sex") in ("m", "f"):
+        asyncio.ensure_future(ensure_clips(persona, ses["sex"]))      # fonda: tayyor salomlashuv yozuvlari yo'q bo'lsa yaratadi
     dinfo = await day_info(info.get("d"), lg(info))
     humor = humor_level()
     ex = G.sample({0: 2, 1: 3, 2: 4, 3: 5}[humor], humor)
@@ -1631,6 +1718,8 @@ def add_routes(app, prefix=""):
     if os.path.isdir(vrmdir):
         app.router.add_static(p + "/vrm", vrmdir)         # 3D avatar: rumiyo-vrm.js va rumiyo.vrm
     clipdir = os.path.join(HERE, "clips")
+    os.makedirs(clipdir, exist_ok=True)
+    app.router.add_get(p + "/clips/manifest.json", clips_manifest_view)
     if os.path.isdir(clipdir):
         app.router.add_static(p + "/clips", clipdir)      # tayyor ovozli salomlashuvlar (tools/make_clips.py yaratadi)
     if p:

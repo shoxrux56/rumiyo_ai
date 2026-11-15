@@ -17,3 +17,6 @@
 - Sayt kirganda tayyor yozuvni darrov chaladi, ustoz esa jim turib, siz gapirishingizni kutadi (&np=1).
 - Yozuv topilmasa yoki chalinmasa, ustoz avvalgidek o'zi salom beradi.
 - Yangi gap qo'shish: clips_phrases.json ga yozing va skriptni qayta ishga tushiring (faqat yangilari yaratiladi).
+- AVTOMATIK: skriptni ishga tushirish shart emas. Ehtirosli yoki shirin ustoz birinchi marta tanlanganda server fonda tayyor salomlashuvlarni
+  Gemini TTS bilan o'zi yaratib clips/ ga saqlaydi (birinchi odam odatdagidek eshitadi, keyingilar darrov). Render bepul tarifida
+  qayta deploy/uyqudan keyin papka tozalanadi va yozuvlar yana o'zi yaratiladi. TTS_MODEL env bilan model o'zgartiriladi.
