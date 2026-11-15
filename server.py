@@ -688,8 +688,11 @@ FIX: <in Uzbek: if the learner's last Russian had a mistake, write "wrong -> cor
 EMO: <one word: happy (you laughed or are delighted), cry (you are moved to tears or joke-crying), or normal. Never angry>
 Also add one more line `Q: <Uzbek sentence> | <Russian sentence>` ONLY if you asked a quiz question in this reply."""
     if live and ses.get("persona") == "fiery":
-        p = ("VOICE DIRECTIVE (overrides everything): from your very first word to the last, speak in a hushed, breathy, intimate WHISPER, as if whispering right into the learner's ear. "
-             "Very low volume, slow, soft, with audible breaths and sighs. Never use a normal speaking voice and never shout. Stay in this whisper even when excited.\n\n") + p
+        p = ("VOICE DIRECTIVE (overrides everything): you are an ASMR-style sensual whisper teacher. From your very first word to the last, whisper softly and slowly, right into the learner's ear: "
+             "very low volume, HALF the normal speaking speed, velvety, smoky, breathy, lingering on vowels and on the end of every sentence. "
+             "Use long pauses, audible slow breaths, soft sighs and little murmurs ('mmm...', 'ahh...', 'ohh...') between phrases, and savor each word as if it tastes sweet. "
+             "Keep sentences SHORT with trailing pauses, like: 'Ahh... mana shunday... mmm... juda yaxshi... yana bir marta... sekin... pichirlab ayt...'. "
+             "Warm, intimate, enchanted, enjoying every moment, never rushed, never loud, never a normal flat voice, even when excited. It is passion for the language and for the learner's progress, tasteful and never explicit.\n\n") + p
     if lg(info) == "en":
         p = to_en(p) + EN_ADDENDUM
     return p, nxt
