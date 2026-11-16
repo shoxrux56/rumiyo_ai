@@ -693,8 +693,8 @@ var RumiyoAvatar = (function () {
     // virtual bass: 200 Hz gacha bo'lgan qismni to'yintirib, 2x/3x garmonikalarini (dinamik chiqara oladigan) qo'shamiz
     var vlp = x.createBiquadFilter(), vsh = x.createWaveShaper(), vhp = x.createBiquadFilter(), vg = x.createGain();
     vlp.type = "lowpass"; vlp.frequency.value = 200; vlp.Q.value = 0.7;
-    var vc = new Float32Array(1024); for (var w = 0; w < 1024; w++) { var v = w / 512 - 1; vc[w] = Math.tanh(v * 5) / Math.tanh(5); }
-    vsh.curve = vc; vsh.oversample = "2x"; vhp.type = "highpass"; vhp.frequency.value = 180; vg.gain.value = 0.25;
+    var vc = new Float32Array(1024); for (var w = 0; w < 1024; w++) { var v = w / 512 - 1; vc[w] = Math.tanh(v * 3) / Math.tanh(3); }
+    vsh.curve = vc; vsh.oversample = "2x"; vhp.type = "highpass"; vhp.frequency.value = 180; vg.gain.value = 0.2;
     var n = Math.floor(x.sampleRate * 0.9), ir = x.createBuffer(2, n, x.sampleRate);
     for (var ch = 0; ch < 2; ch++) { var d = ir.getChannelData(ch); for (var i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3); }
     cv.buffer = ir; dry.gain.value = 0.95; wet.gain.value = 0.05; out.gain.value = 0.95;
@@ -710,9 +710,13 @@ var RumiyoAvatar = (function () {
     for (var i = 0; i < i16.length; i++) f[i] = i16[i] / 32768;
     var ab = L.pctx.createBuffer(1, f.length, 24000); ab.copyToChannel(f, 0);
     var src = L.pctx.createBufferSource(); src.buffer = ab; var rate = 1;
-    if (P && P.c === "fiery") { try { rate = (AV[P.a] && AV[P.a].s === "m") ? 0.94 : 0.917; src.playbackRate.value = rate; src.connect(velvetFx(L)); } catch (e) { rate = 1; src.playbackRate.value = 1; src.connect(L.ana || L.pctx.destination); } }
-    else src.connect(L.ana || L.pctx.destination);
-    var t = Math.max(L.pctx.currentTime + 0.03, L.next); src.start(t); L.next = t + ab.duration / rate;
+    // Pauza ("...") dan keyin yangi gap boshlansa: 120 ms zaxira (bo'laklar uzilib qolmasin) va yumshoq kirish (chiqillash bo'lmasin)
+    var now = L.pctx.currentTime, gap = !(L.next > now + 0.005), t = gap ? now + 0.12 : L.next;
+    var eg = L.pctx.createGain(); src.connect(eg);
+    if (gap) { eg.gain.setValueAtTime(0, t); eg.gain.linearRampToValueAtTime(1, t + 0.012); }
+    if (P && P.c === "fiery") { try { rate = (AV[P.a] && AV[P.a].s === "m") ? 0.94 : 0.917; src.playbackRate.value = rate; eg.connect(velvetFx(L)); } catch (e) { rate = 1; src.playbackRate.value = 1; eg.connect(L.ana || L.pctx.destination); } }
+    else eg.connect(L.ana || L.pctx.destination);
+    src.start(t); L.next = t + ab.duration / rate;
     L.srcs.push(src); setAv(L.mood || "speak"); if (!L.ptt && !L.muted) micUI("wait");
     try { if (L.pctx.state === "suspended") { L.pctx.resume(); state("Ovoz chiqmasa, ekranga bir marta tegining"); } } catch (e) {}
     src.onended = function () { var k = L.srcs.indexOf(src); if (k >= 0) L.srcs.splice(k, 1); if (!L.srcs.length) { setAv("idle"); L.quiet = Date.now() + 450; if (!L.ptt && !L.muted) { micUI("on"); state("Sizning navbatingiz: gapiravering"); } } };
