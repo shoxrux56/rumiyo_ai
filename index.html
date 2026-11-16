@@ -685,19 +685,19 @@ var RumiyoAvatar = (function () {
     bx.type = "peaking"; bx.frequency.value = 420; bx.Q.value = 0.8; bx.gain.value = -1.5;                 // "quti" tovushi faqat sal kamayadi (ovoz yupqalashmasin)
     pr.type = "peaking"; pr.frequency.value = 1100; pr.Q.value = 0.8; pr.gain.value = 2.5;                 // ~1 kHz: so'z aniq eshitilsin
     hs.type = "peaking"; hs.frequency.value = 3200; hs.Q.value = 0.8; hs.gain.value = -2;                  // qattiqlik yumshaydi
-    hi.type = "highshelf"; hi.frequency.value = 9000; hi.gain.value = 2.5;                                 // nafas tabiiy, o'tkir emas
-    var cur = new Float32Array(1024); for (var q = 0; q < 1024; q++) { var xx = q / 512 - 1; cur[q] = Math.tanh(xx * 1.8) / Math.tanh(1.8); }
+    hi.type = "lowpass"; hi.frequency.value = 7000; hi.Q.value = 0.6;                                 // nafas tabiiy, o'tkir emas
+    var cur = new Float32Array(1024); for (var q = 0; q < 1024; q++) { var xx = q / 512 - 1; cur[q] = Math.tanh(xx * 1.3) / Math.tanh(1.3); }
     sat.curve = cur; sat.oversample = "2x";
-    cmp.threshold.value = -34; cmp.knee.value = 18; cmp.ratio.value = 6; cmp.attack.value = 0.004; cmp.release.value = 0.14; mk.gain.value = 1.6;   // kuchli siqish: nafaslar ham baland
+    cmp.threshold.value = -22; cmp.knee.value = 20; cmp.ratio.value = 3.5; cmp.attack.value = 0.004; cmp.release.value = 0.14; mk.gain.value = 1.15;   // kuchli siqish: nafaslar ham baland
     lim.threshold.value = -6; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.001; lim.release.value = 0.08;                       // limiter: baland tovush chirillamasin
     // virtual bass: 200 Hz gacha bo'lgan qismni to'yintirib, 2x/3x garmonikalarini (dinamik chiqara oladigan) qo'shamiz
     var vlp = x.createBiquadFilter(), vsh = x.createWaveShaper(), vhp = x.createBiquadFilter(), vg = x.createGain();
     vlp.type = "lowpass"; vlp.frequency.value = 200; vlp.Q.value = 0.7;
     var vc = new Float32Array(1024); for (var w = 0; w < 1024; w++) { var v = w / 512 - 1; vc[w] = Math.tanh(v * 5) / Math.tanh(5); }
-    vsh.curve = vc; vsh.oversample = "2x"; vhp.type = "highpass"; vhp.frequency.value = 180; vg.gain.value = 0.35;
+    vsh.curve = vc; vsh.oversample = "2x"; vhp.type = "highpass"; vhp.frequency.value = 180; vg.gain.value = 0.25;
     var n = Math.floor(x.sampleRate * 0.9), ir = x.createBuffer(2, n, x.sampleRate);
     for (var ch = 0; ch < 2; ch++) { var d = ir.getChannelData(ch); for (var i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3); }
-    cv.buffer = ir; dry.gain.value = 0.88; wet.gain.value = 0.14; out.gain.value = 0.95;
+    cv.buffer = ir; dry.gain.value = 0.95; wet.gain.value = 0.05; out.gain.value = 0.95;
     inp.connect(hp); hp.connect(lo); lo.connect(bx); bx.connect(pr); pr.connect(hs); hs.connect(hi); hi.connect(sat); sat.connect(cmp); cmp.connect(mk);
     inp.connect(vlp); vlp.connect(vsh); vsh.connect(vhp); vhp.connect(vg); vg.connect(mk);
     mk.connect(dry); mk.connect(cv); cv.connect(wet); dry.connect(body); wet.connect(body); body.connect(lim); lim.connect(out);
