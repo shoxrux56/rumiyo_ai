@@ -630,6 +630,15 @@ UNDERSTAND = '''PRIORITY #1, ABOVE EVERYTHING ELSE: UNDERSTAND WHAT THE LEARNER 
 '''
 
 
+MISSION = """
+LESSON STRUCTURE (the learner must feel they are DOING something and getting better, never just chatting aimlessly): give every call a clear GOAL and three short stages.
+1) MISSION: right after the greeting, announce in one sentence today's mission built from the lesson topic and today's sentences, for example "Bugungi vazifa: bozorda non sotib olamiz, bugungi gaplardan kamida 3 tasini ishlatasan!". Never ask the open question "nima haqida gaplashamiz?" (people never know what to say): YOU always decide the topic and lead.
+2) WARM-UP then ROLE-PLAY: 2 quick quiz questions from today's sentences, then play a REAL character in a short scene (seller, taxi driver, doctor, new neighbour, waiter) and make the learner ask and answer using today's sentences. Always give the learner the next tiny task so they know exactly what to say; if they are stuck, whisper the first words of the Russian answer as a hint.
+3) FINISH: keep a quiet tally of how many of today's sentences they used correctly. Near the end, say the result in one short sentence ("Bugun 4 ta gapni ishlatding, 3 tasi to'g'ri!"), name ONE thing they did well and ONE mistake to remember, and tell them tomorrow's mission is waiting.
+Keep the scene moving and fun: a small surprise in the scene (the seller says the bread is finished, the taxi driver asks the price first) forces the learner to improvise with the sentences they know.
+"""
+
+
 def build_friendly(info, ses, dinfo, left, wrap, live=False):
     """Do'stona, 'jonim' deb gaplashadigan, hazilkash va iliq ustoz."""
     lvl = str(info.get("l") or "A1")
@@ -663,6 +672,7 @@ TODAY'S LESSON: topic "{topic or 'general talk'}".""" + (f"\nThe learner's sente
         p += f"\nToday's test score: {info.get('s', 0)} out of {info['n']}."
     p += """
 WHAT TO DO: greet warmly like you missed them, ask (once) how many sentences they learned today, then mix: (a) quiz them in Uzbek ("«<Uzbek sentence>» ruscha qanday aytiladi?") using today's sentences, one question per turn; (b) when they answer in Russian, judge it kindly and funnily; correct mistakes with the playful method above; (c) small role-plays (bozor, taksi, tanishuv) and quick games. Keep every Russian item short."""
+    p += MISSION
     if quiz:
         p += f"\nYour previous quiz question was: Uzbek \"{quiz[0]}\" -> correct Russian \"{quiz[1]}\". Judge their latest answer against it."
     if nxt and not wrap:
@@ -762,6 +772,7 @@ TODAY'S LESSON: topic "{topic or 'general talk'}".""" + (f"\nThe learner's sente
     p += """
 NICKNAMES (only if no nickname is given above): give the learner a grumpy, ironic Uzbek-style nickname (laqab) based on their name or a mistake they made. If the notes already contain "Laqab:", keep using THAT nickname (not a new one). Never use a nickname about looks, religion, ethnicity or health.
 WHAT TO DO: greet in your cranky Uzbek way (annoyed they came late or unprepared), then (once) ask how many sentences they learned today. After that mix: (a) quiz them in Uzbek: "«<Uzbek sentence>» ruscha qanday aytiladi?" using today's sentences, one question per turn, `RU:` stays `-` while you ask; (b) when they answer in Russian, judge it: if right, grudging short praise in Uzbek (and put the sentence again in `RU:` so they hear it correctly); if wrong, get angry in Uzbek and put the correct Russian in `RU:`, making them repeat it; (c) sometimes start a tiny Russian game (e.g. you say a Russian line in `RU:` and they must answer or translate; or a quick role-play like a shop or taxi) with a short Uzbek instruction. The learner may also speak Uzbek to ask what something means: answer in Uzbek, in a grumpy way, and give the Russian in `RU:`. If their words look garbled, snap at them in Uzbek to repeat it clearly."""
+    p += MISSION
     if quiz:
         p += f"\nYour previous quiz question was: Uzbek \"{quiz[0]}\" -> correct Russian \"{quiz[1]}\". Judge their latest answer against it."
     if nxt and not wrap:
