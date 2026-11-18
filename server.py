@@ -125,6 +125,11 @@ def verify(token):
         return None
 
 
+def vip_ok(info):
+    """Suhbat faqat VIP uchun (bot havolaga "v":1 yozadi). SUHBAT_FREE=1 bo'lsa hamma uchun ochiq."""
+    return os.getenv("SUHBAT_FREE") == "1" or bool(info and info.get("v") == 1)
+
+
 def is_admin(request):
     return hmac.compare_digest(request.headers.get("X-Secret", ""), SECRET)
 
@@ -1238,6 +1243,8 @@ async def ai_live(request):
     info = verify(request.query.get("t"))
     if not info:
         await j({"t": "error", "error": "Havola eskirgan. Botdan qayta oching."}); await ws.close(); return ws
+    if not vip_ok(info):
+        await j({"t": "error", "error": "Ovozli suhbat VIP uchun. Botda 💎 VIP ga o'ting."}); await ws.close(); return ws
     uid = int(info["u"])
     left0 = left_for(uid)
     if left0 <= 0:
@@ -1417,6 +1424,8 @@ async def ai_start(request):
         info = None
     if not info:
         return web.json_response({"error": "Havola eskirgan. Botdan qayta oching."}, status=403)
+    if not vip_ok(info):
+        return web.json_response({"error": "Ovozli suhbat VIP uchun. Botda 💎 VIP ga o'ting."}, status=403)
     uid = int(info["u"])
     left = left_for(uid)
     dinfo = await day_info(info.get("d"), lg(info))
