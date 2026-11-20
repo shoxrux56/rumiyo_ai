@@ -635,6 +635,20 @@ UNDERSTAND = '''PRIORITY #1, ABOVE EVERYTHING ELSE: UNDERSTAND WHAT THE LEARNER 
 '''
 
 
+def hearing(info, dinfo):
+    """Eshitish yo'riqnomasi: o'zbek aksentli rus/ingliz gapi boshqa tilga (turk, qozoq, ozar...) o'girilib ketmasin."""
+    en = lg(info) == "en"
+    tgt, other = ("ENGLISH", "English") if en else ("RUSSIAN", "Russian")
+    items = (dinfo or {}).get("i") or []
+    exp = "\n".join(f"- {x[1]} / {x[2]}" for x in items[:15])
+    return f"""
+
+HEARING THE LEARNER (very important): this learner is an UZBEK speaker practicing {tgt}. Whenever they speak the language they are learning, it WILL sound heavily Uzbek-accented, slow, with wrong stress and swallowed endings. That is normal: it is still {tgt}, not Turkish, Kazakh, Azerbaijani, Tatar, Kyrgyz or any other language. Their speech can only be Uzbek, {other}, or a mix of those two. NEVER interpret a phrase as any other language. If a stretch of their speech sounds like another language or like nonsense, assume it is accented {other} (most likely one of the lesson phrases below, or something about today's topic) and answer that. Judge by meaning, not by perfect pronunciation: if they said roughly the target phrase, accept it as correct and praise it. Only ask to repeat when you truly cannot guess, and say what you think you heard.
+Phrases the learner is most likely trying to say today:
+{exp or "- (use the lesson topic)"}
+"""
+
+
 MISSION = """
 LESSON STRUCTURE (the learner must feel they are DOING something and getting better, never just chatting aimlessly): give every call a clear GOAL and three short stages.
 1) MISSION: right after the greeting, announce in one sentence today's mission built from the lesson topic and today's sentences, for example "Bugungi vazifa: bozorda non sotib olamiz, bugungi gaplardan kamida 3 tasini ishlatasan!". Never ask the open question "nima haqida gaplashamiz?" (people never know what to say): YOU always decide the topic and lead.
@@ -677,7 +691,7 @@ TODAY'S LESSON: topic "{topic or 'general talk'}".""" + (f"\nThe learner's sente
         p += f"\nToday's test score: {info.get('s', 0)} out of {info['n']}."
     p += """
 WHAT TO DO: greet warmly like you missed them, ask (once) how many sentences they learned today, then mix: (a) quiz them in Uzbek ("«<Uzbek sentence>» ruscha qanday aytiladi?") using today's sentences, one question per turn; (b) when they answer in Russian, judge it kindly and funnily; correct mistakes with the playful method above; (c) small role-plays (bozor, taksi, tanishuv) and quick games. Keep every Russian item short."""
-    p += MISSION
+    p += MISSION + hearing(info, dinfo)
     if quiz:
         p += f"\nYour previous quiz question was: Uzbek \"{quiz[0]}\" -> correct Russian \"{quiz[1]}\". Judge their latest answer against it."
     if nxt and not wrap:
@@ -777,7 +791,7 @@ TODAY'S LESSON: topic "{topic or 'general talk'}".""" + (f"\nThe learner's sente
     p += """
 NICKNAMES (only if no nickname is given above): give the learner a grumpy, ironic Uzbek-style nickname (laqab) based on their name or a mistake they made. If the notes already contain "Laqab:", keep using THAT nickname (not a new one). Never use a nickname about looks, religion, ethnicity or health.
 WHAT TO DO: greet in your cranky Uzbek way (annoyed they came late or unprepared), then (once) ask how many sentences they learned today. After that mix: (a) quiz them in Uzbek: "«<Uzbek sentence>» ruscha qanday aytiladi?" using today's sentences, one question per turn, `RU:` stays `-` while you ask; (b) when they answer in Russian, judge it: if right, grudging short praise in Uzbek (and put the sentence again in `RU:` so they hear it correctly); if wrong, get angry in Uzbek and put the correct Russian in `RU:`, making them repeat it; (c) sometimes start a tiny Russian game (e.g. you say a Russian line in `RU:` and they must answer or translate; or a quick role-play like a shop or taxi) with a short Uzbek instruction. The learner may also speak Uzbek to ask what something means: answer in Uzbek, in a grumpy way, and give the Russian in `RU:`. If their words look garbled, snap at them in Uzbek to repeat it clearly."""
-    p += MISSION
+    p += MISSION + hearing(info, dinfo)
     if quiz:
         p += f"\nYour previous quiz question was: Uzbek \"{quiz[0]}\" -> correct Russian \"{quiz[1]}\". Judge their latest answer against it."
     if nxt and not wrap:
