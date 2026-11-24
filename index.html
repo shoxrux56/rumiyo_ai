@@ -754,6 +754,7 @@ var RumiyoAvatar = (function () {
   }
   function liveFail() {
     if (!live || live.closed) return; liveCleanup(); live = null;
+    if (TI && TI.h && lessonUrl()) { finish({ intro: true, cta: "Endi darsga o'ting 👇" }); return; }
     classicStart();      // Live ishlamasa (limit, tarmoq): oddiy bepul rejimga o'tamiz
   }
   // Tugma bilan gapirish: bosing -> gapiring -> yana bosing (yoki tugmani bosib turing, qo'yib yuborsangiz yuboriladi)
@@ -852,10 +853,10 @@ var RumiyoAvatar = (function () {
       else if (o.t === "left") { setLeft(o.left); }
       else if (o.t === "lesson_btn") { showLessonBtn(); }
       else if (o.t === "nolive") { liveFail(); }
-      else if (o.t === "error") { liveCleanup(); state(o.error || "Xatolik"); }
+      else if (o.t === "error") { liveCleanup(); state(o.error || "Xatolik"); try { if (TI && TI.h && lessonUrl()) showLessonBtn(); } catch (e) {} }
       else if (o.t === "done") { var d = o; setTimeout(function () { liveCleanup(); finish(d); }, 1500); }
     };
-    ws.onclose = function () { if (!L.closed && !L.ready) liveFail(); else if (!L.closed) { liveCleanup(); finish({ cta: "Aloqa uzildi. Botga qayting 👇" }); } };
+    ws.onclose = function () { if (!L.closed && !L.ready) liveFail(); else if (!L.closed) { liveCleanup(); finish({ intro: !!(TI && TI.h), cta: (TI && TI.h) ? "Endi darsga o'ting 👇" : "Aloqa uzildi. Botga qayting 👇" }); } };
     ws.onerror = function () { if (!L.closed && !L.ready) liveFail(); };
   }
 

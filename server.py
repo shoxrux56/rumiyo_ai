@@ -1284,6 +1284,8 @@ async def ai_live(request):
         await j({"t": "error", "error": "Ovozli suhbat VIP uchun. Botda 💎 VIP ga o'ting."}); await ws.close(); return ws
     uid = int(info["u"])
     left0 = left_for(uid)
+    if info.get("h"):
+        left0 = max(left0, 240)          # dars oldi suhbati kunlik limitga bog'liq emas
     if left0 <= 0:
         await j({"t": "done", "cta": cta_text(), "bot": BOT_URL}); await ws.close(); return ws
     if not (LIVE_ON and keys("gemini")):
@@ -1417,6 +1419,7 @@ async def ai_live(request):
                             await j({"t": "gender", "g": gg})
                 ot = (sc.get("outputTranscription") or {}).get("text")
                 if ot:
+                    state["last_out"] = state.get("last_out", "") + ot
                     state["cur_out"] += ot
                     await j({"t": "out", "text": ot})
                 if sc.get("interrupted"):
@@ -1424,6 +1427,9 @@ async def ai_live(request):
                 if sc.get("turnComplete"):
                     await flush_turn()
                     await j({"t": "turn"})
+                    if intro and not state.get("btn_pending") and re.search(r"tugma|darsga o.t|darsni boshla|omad", state.get("last_out", ""), re.I):
+                        state["btn_pending"] = True      # Rumiyo funksiyani chaqirmasa ham "darsga o'tamiz" desa, tugma chiqadi
+                    state["last_out"] = ""
                     if state.get("btn_pending") and not state["btn"]:
                         state["btn"] = True
                         await j({"t": "lesson_btn"})
