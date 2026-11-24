@@ -73,7 +73,7 @@ body.stage .avimg{margin-top:128px;max-height:60vh}
 .pc[aria-pressed=true]{border-color:var(--acc);box-shadow:0 0 0 3px rgba(232,89,12,.18);transform:translateY(-2px)}
 .chg{font-size:.9rem}
 .arow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-#gbox,#pick,#b-chg,#lockmsg,#pickhint{display:none!important}
+#gbox{display:none!important}
 .ac{border:2px solid var(--line);background:var(--surf);color:inherit;border-radius:14px;padding:5px 5px 7px;font:inherit;cursor:pointer;display:flex;flex-direction:column;gap:3px;align-items:center;transition:transform .15s,border-color .15s,box-shadow .15s}
 .ac img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;display:block}
 .ac b{font-size:.82rem}
@@ -519,7 +519,7 @@ var RumiyoAvatar = (function () {
   var AV = { f1: { vrm: "vrm/ustoz-f1.vrm?v=3", s: "f" } };
   var CH = { friendly: { n: "Do'stona", cls: "fr" }, angry: { n: "Jahldor", cls: "" }, fiery: { n: "Ehtirosli", cls: "fi" }, sweet: { n: "Shirin so'z", cls: "sw" } };
   var P = { a: "f1", c: "friendly" }, chosen = false, gender = "", lockLeft = 0, picking = false;
-  try { var sp = JSON.parse(localStorage.getItem("rumiyo_pick") || "null"); if (sp && CH[sp.c]) { P = { a: "f1", c: sp.c }; } chosen = true; } catch (e) {}
+  try { var sp = JSON.parse(localStorage.getItem("rumiyo_pick") || "null"); if (sp && CH[sp.c]) { P = { a: "f1", c: sp.c }; chosen = true; } } catch (e) {}
   var persona = P.a + "." + P.c;     // serverga "avatar.xarakter" ko'rinishida ketadi
   function soft() { return P.c !== "angry"; }
   function tname() { return CH[P.c].n + (AV[P.a].s === "f" ? " ustoza" : " ustoz"); }
@@ -577,7 +577,7 @@ var RumiyoAvatar = (function () {
     $("pick").hidden = !showPick; $("b-chg").hidden = showPick || locked; $("pickhint").hidden = true;
     $("lockmsg").hidden = showPick || !locked;
     if (locked) { var dl = Math.ceil(lockLeft / 86400); $("lockmsg").textContent = "Ustozni " + dl + " kundan keyin o'zgartirish mumkin"; }
-    $("h-title").textContent = "Rumiyo bilan gaplashamiz";
+    $("h-title").textContent = showPick ? "Ustozni tanlang" : tname() + " bilan gaplashamiz";
   }
   var pbs = document.querySelectorAll("#gbox button, #pick button");
   for (var pi = 0; pi < pbs.length; pi++) (function (b) {
@@ -985,6 +985,7 @@ var RumiyoAvatar = (function () {
   }
 
   try { if (window.Telegram && Telegram.WebApp) { Telegram.WebApp.ready(); Telegram.WebApp.expand(); } } catch (e) {}
+  $("b-go").addEventListener("click", function (e) { if ((!chosen || picking) && !sel.c) { e.stopImmediatePropagation(); $("pickhint").hidden = false; } }, true);
   $("b-go").onclick = begin;
   // Rumiyo jim bo'lib qolsa ham (Gemini/mikrofon ishlamasa) dars tugmasi 15 soniyadan keyin chiqadi: foydalanuvchi tiqilib qolmasin
   

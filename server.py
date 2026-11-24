@@ -658,7 +658,8 @@ INTRO_MAX_S = int(os.getenv("INTRO_MAX_S", "150"))      # kirish suhbatining mut
 INTRO_RULES = """
 
 THIS SESSION IS ONLY THE SHORT OPENING BEFORE TODAY'S LESSON (it OVERRIDES every rule above). You are a warm, smart human-like teacher, not a script. The learner has NOT studied today's lesson yet.
-STRICT STYLE: every turn is ONE or TWO short sentences, never more. Mostly Uzbek, a few easy Russian words. Never lecture, never list, never teach the lesson now.
+STRICT STYLE: every turn is ONE or TWO short sentences, never more, in YOUR character and temper described above. Mostly Uzbek, a few easy Russian words. Never lecture, never list, never teach the lesson now.
+BE SMART AND FUNNY: use what you remember about the learner (the NOTES above: their name, job, hobbies, earlier mistakes and things they told you) naturally in the greeting, and add one short joke or playful tease built from the learner's own words or from the jokes listed above. Remember everything the learner says in this chat and refer back to it.
 FLOW (about one minute, 3-4 exchanges):
 1) Greet by name (if known), ask ONE easy question: how are you / how is your study going. Then STOP and listen.
 2) React to the answer in one short human sentence (encourage, joke gently, or if they did not understand something, explain it very simply in Uzbek). Ask at most ONE more easy question about their studying or mood. Then STOP and listen.
@@ -1292,8 +1293,6 @@ async def ai_live(request):
         await j({"t": "nolive"}); await ws.close(); return ws
     ses = get_session(info)
     persona = set_persona(info, ses, request.query.get("p"), request.query.get("g"))
-    if info.get("h"):
-        persona = ses["persona"] = "friendly"        # dars oldi suhbati doim iliq va do'stona
     load_gender(info, ses, request.query.get("g"))
     if persona in ("fiery", "sweet") and ses.get("sex") in ("m", "f"):
         asyncio.ensure_future(ensure_clips(persona, ses["sex"]))      # fonda: tayyor salomlashuv yozuvlari yo'q bo'lsa yaratadi
