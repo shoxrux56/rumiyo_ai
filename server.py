@@ -1308,6 +1308,9 @@ async def ai_live(request):
         up, _k = opened
         again = bool(ses["hist"])
         opener = opener_for(persona, again, ses)
+        if intro:
+            opener = ("(o'quvchi bugungi dars oldidan kirdi: iliq salom ber, ismi bilan murojaat qil, 1 daqiqa qisqa suhbatlash, "
+                      "so'ng darajasi va dars raqamini ayt va darsni boshlashni taklif qil. Jinsini yoki yodlagan gaplarini so'rama)")
         if not np_clip:
             await up.send_str(json.dumps({"realtimeInput": {"text": opener}}))
         await j({"t": "ready", "left": left0, "ptt": LIVE_PTT, "g": ses.get("g") or ""})
