@@ -664,7 +664,7 @@ var RumiyoAvatar = (function () {
     if ($("lbtn")) return;
     var b = document.createElement("a"); b.id = "lbtn"; b.className = "btn"; b.textContent = "📖 Darsni boshlash";
     b.href = lessonUrl() || (botUrl.replace(/\?.*$/, "") + "?start=dars");
-    b.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + env(safe-area-inset-bottom,0px));z-index:30;box-shadow:0 6px 24px rgba(0,0,0,.35);text-decoration:none";
+    b.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:calc(190px + env(safe-area-inset-bottom,0px));z-index:30;white-space:nowrap;width:auto;padding:12px 22px;box-shadow:0 6px 24px rgba(0,0,0,.35);text-decoration:none";
     b.addEventListener("click", function (e) {
       if (lessonUrl()) return;      // saytning o'zida: trenerga o'tadi
       try { var tw = window.Telegram && Telegram.WebApp; if (tw) { e.preventDefault(); if (tw.openTelegramLink) tw.openTelegramLink(b.href); setTimeout(function () { try { tw.close(); } catch (x) {} }, 250); } } catch (x) {}
@@ -865,7 +865,7 @@ var RumiyoAvatar = (function () {
       return noMic("Mikrofon bu yerda ishlamaydi", "Mikrofon ochilmadi. Qurilma sozlamasidan mikrofonga ruxsat bering.");
     }
     navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(function (s) {
-      mic = s; $("log").innerHTML = ""; show("s-chat"); setAv("idle"); state("Rumiyo o'ylayapti…"); $("b-mic").disabled = true;
+      mic = s; $("log").innerHTML = ""; show("s-chat"); try { if (TI && TI.h && lessonUrl()) setTimeout(showLessonBtn, 50000); } catch (e) {} setAv("idle"); state("Rumiyo o'ylayapti…"); $("b-mic").disabled = true;
       post("ai/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token, live: true, persona: persona, g: gender }) }).then(function (j) {
         if (j.done && !(j.ru || j.uz)) return finish(j);
         if (j.error) { state(j.error); return; }
@@ -986,7 +986,7 @@ var RumiyoAvatar = (function () {
   try { if (window.Telegram && Telegram.WebApp) { Telegram.WebApp.ready(); Telegram.WebApp.expand(); } } catch (e) {}
   $("b-go").onclick = begin;
   // Rumiyo jim bo'lib qolsa ham (Gemini/mikrofon ishlamasa) dars tugmasi 15 soniyadan keyin chiqadi: foydalanuvchi tiqilib qolmasin
-  try { if (TI && TI.h && lessonUrl()) { if (TI.h === 2 && !/[?&]r=/.test(location.search)) showLessonBtn(); else setTimeout(showLessonBtn, 15000); } } catch (e) {}
+  
   try { navigator.permissions.query({ name: "microphone" }).then(function (r) { if (r.state === "granted" && !live && $("s-hello") && !$("s-hello").classList.contains("hide")) begin(); }).catch(function () {}); } catch (e) {}
   ["touchstart", "click"].forEach(function (ev) { document.addEventListener(ev, function () { try { if (window._pc && window._pc.state === "suspended") window._pc.resume(); if (live && live.pctx && live.pctx.state === "suspended") live.pctx.resume(); } catch (e) {} }, { passive: true }); });
   document.addEventListener("pointerdown", function () { try { if (live && live.pctx && live.pctx.state === "suspended") live.pctx.resume(); } catch (e) {} }, true);
