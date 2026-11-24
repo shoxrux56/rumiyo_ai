@@ -1289,6 +1289,10 @@ async def ai_live(request):
     intro = bool(info.get("h"))                       # darsdan OLDINGI kirish suhbati (botdan "h":1 bilan keladi)
     if intro:
         sysmsg += INTRO_RULES
+        sysmsg += ("\n- FACTS for the announcement: the learner's level is %s and this is lesson number %s of that level. "
+                   "Say it clearly in Uzbek, for example \"%s daraja, %s-dars\". Also tell them that after the lesson there is a short test "
+                   "and they need at least %s%% correct to pass, and that you will talk with them again after the test."
+                   % (info.get("l") or "A1", info.get("k") or "", info.get("l") or "A1", info.get("k") or "", info.get("p") or 70))
     np_clip = request.query.get("np") == "1"          # salomlashuv tayyor ovoz yozuvi bilan allaqachon aytilgan
     if np_clip:
         sysmsg += ("\n\nIMPORTANT: the opening greeting was ALREADY played to the learner as a short pre-recorded whisper (a warm hello and an invitation to begin). "
