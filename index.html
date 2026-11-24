@@ -865,7 +865,7 @@ var RumiyoAvatar = (function () {
       return noMic("Mikrofon bu yerda ishlamaydi", "Mikrofon ochilmadi. Qurilma sozlamasidan mikrofonga ruxsat bering.");
     }
     navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(function (s) {
-      mic = s; $("log").innerHTML = ""; show("s-chat"); try { if (TI && TI.h && lessonUrl()) setTimeout(showLessonBtn, 50000); } catch (e) {} setAv("idle"); state("Rumiyo o'ylayapti…"); $("b-mic").disabled = true;
+      mic = s; $("log").innerHTML = ""; show("s-chat"); setAv("idle"); state("Rumiyo o'ylayapti…"); $("b-mic").disabled = true;
       post("ai/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token, live: true, persona: persona, g: gender }) }).then(function (j) {
         if (j.done && !(j.ru || j.uz)) return finish(j);
         if (j.error) { state(j.error); return; }
