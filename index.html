@@ -405,7 +405,7 @@ var RumiyoAvatar = (function () {
     var back = location.origin + location.pathname + "?t=" + token;
     return TI.x + (TI.x.indexOf("?") < 0 ? "?" : "&") + "l=" + TI.i + "&ret=" + encodeURIComponent(back) + (location.hash || "");
   }
-  if (TI.h === 2 && lessonUrl() && !/[?&]r=/.test(location.search)) { location.replace(lessonUrl()); }
+  // o'zi o'tmaydi: "Darsni boshlash" tugmasi ko'rsatiladi (pastda showLessonBtn)
   // trenerdan qaytganda natija (r) serverga yuboriladi, suhbat uchun yangi havola olinadi
   (function () {
     var r = new URLSearchParams(location.search).get("r");
@@ -986,7 +986,7 @@ var RumiyoAvatar = (function () {
   try { if (window.Telegram && Telegram.WebApp) { Telegram.WebApp.ready(); Telegram.WebApp.expand(); } } catch (e) {}
   $("b-go").onclick = begin;
   // Rumiyo jim bo'lib qolsa ham (Gemini/mikrofon ishlamasa) dars tugmasi 15 soniyadan keyin chiqadi: foydalanuvchi tiqilib qolmasin
-  try { if (TI && TI.h && lessonUrl()) setTimeout(showLessonBtn, 15000); } catch (e) {}
+  try { if (TI && TI.h && lessonUrl()) { if (TI.h === 2 && !/[?&]r=/.test(location.search)) showLessonBtn(); else setTimeout(showLessonBtn, 15000); } } catch (e) {}
   try { navigator.permissions.query({ name: "microphone" }).then(function (r) { if (r.state === "granted" && !live && $("s-hello") && !$("s-hello").classList.contains("hide")) begin(); }).catch(function () {}); } catch (e) {}
   ["touchstart", "click"].forEach(function (ev) { document.addEventListener(ev, function () { try { if (window._pc && window._pc.state === "suspended") window._pc.resume(); if (live && live.pctx && live.pctx.state === "suspended") live.pctx.resume(); } catch (e) {} }, { passive: true }); });
   document.addEventListener("pointerdown", function () { try { if (live && live.pctx && live.pctx.state === "suspended") live.pctx.resume(); } catch (e) {} }, true);
