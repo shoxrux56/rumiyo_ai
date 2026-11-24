@@ -641,9 +641,25 @@ var RumiyoAvatar = (function () {
     return "speak";
   }
 
+  // kirish suhbatida: Rumiyo mavzuni aytgach "Darsni boshlash" tugmasi chiqadi
+  function showLessonBtn() {
+    if ($("lbtn")) return;
+    var b = document.createElement("a"); b.id = "lbtn"; b.className = "btn"; b.textContent = "📖 Darsni boshlash";
+    b.href = botUrl.replace(/\?.*$/, "") + "?start=dars";
+    b.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + env(safe-area-inset-bottom,0px));z-index:30;box-shadow:0 6px 24px rgba(0,0,0,.35);text-decoration:none";
+    b.addEventListener("click", function (e) {
+      try { var tw = window.Telegram && Telegram.WebApp; if (tw) { e.preventDefault(); if (tw.openTelegramLink) tw.openTelegramLink(b.href); setTimeout(function () { try { tw.close(); } catch (x) {} }, 250); } } catch (x) {}
+    });
+    document.body.appendChild(b);
+  }
+
   function finish(j) {
     stopMic(); if (tick) clearInterval(tick); document.body.classList.remove("angry");
     if (j && j.bot) botUrl = j.bot;
+    var lb = $("lbtn"); if (lb && lb.parentNode) lb.parentNode.removeChild(lb);
+    var intro = !!(j && j.intro);
+    if (intro) botUrl = botUrl.replace(/\?.*$/, "") + "?start=dars";
+    $("e-bot").textContent = intro ? "📖 Darsni boshlash" : "Botga qaytish";
     $("e-p").textContent = (j && j.cta) || "Botga qayting — darsni davom ettiring 👇";
     $("e-bot").href = botUrl; show("s-end");
   }
@@ -813,6 +829,7 @@ var RumiyoAvatar = (function () {
       else if (o.t === "int") { liveStopPlay(L); L.curAi = null; }
       else if (o.t === "turn") { L.curMe = null; L.curAi = null; L.outText = ""; L.mood = "speak"; if (L.ptt && !L.talking) { micUI("idle"); state("Sizning navbatingiz: tugmani bosib gapiring"); } }
       else if (o.t === "left") { setLeft(o.left); }
+      else if (o.t === "lesson_btn") { showLessonBtn(); }
       else if (o.t === "nolive") { liveFail(); }
       else if (o.t === "error") { liveCleanup(); state(o.error || "Xatolik"); }
       else if (o.t === "done") { var d = o; setTimeout(function () { liveCleanup(); finish(d); }, 1500); }
