@@ -401,6 +401,11 @@ var RumiyoAvatar = (function () {
   parseTI();
   // trenerga o'tish manzili: tg ma'lumoti (hash) ham beriladi, shunda trenerda progress (CloudStorage) saqlanadi; ret = qaytish manzili
   function lessonUrl() {
+    if (TI.h === 3 && TI.tx) {       // yangi o'quvchi: daraja testi (saytdan chiqib, test tugagach qaytadi)
+      var bk = location.origin + location.pathname + "?t=" + token;
+      return TI.tx + (TI.tx.indexOf("?") < 0 ? "?" : "&") + "ret=" + encodeURIComponent(bk) + (location.hash || "");
+    }
+    if (TI.h === 4) return "";
     if (!TI.x || !TI.i) return "";
     var back = location.origin + location.pathname + "?t=" + token;
     return TI.x + (TI.x.indexOf("?") < 0 ? "?" : "&") + "l=" + TI.i + "&ret=" + encodeURIComponent(back) + (location.hash || "");
@@ -411,6 +416,16 @@ var RumiyoAvatar = (function () {
     var r = new URLSearchParams(location.search).get("r");
     if (!r || !token) return;
     fetch("lesson/result", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token, r: r }) })
+      .then(function (x) { return x.json(); })
+      .then(function (j) {
+        if (j && j.ok && j.token) { token = j.token; parseTI(); try { history.replaceState(null, "", location.pathname + "?t=" + encodeURIComponent(token) + location.hash); } catch (e) {} }
+      }).catch(function () {});
+  })();
+  // daraja testidan qaytganda natija (pr) serverga yuboriladi, test-keyingi suhbat uchun yangi havola olinadi
+  (function () {
+    var r = new URLSearchParams(location.search).get("pr");
+    if (!r || !token) return;
+    fetch("placement/result", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token, r: r }) })
       .then(function (x) { return x.json(); })
       .then(function (j) {
         if (j && j.ok && j.token) { token = j.token; parseTI(); try { history.replaceState(null, "", location.pathname + "?t=" + encodeURIComponent(token) + location.hash); } catch (e) {} }
@@ -662,7 +677,7 @@ var RumiyoAvatar = (function () {
   // kirish suhbatida: Rumiyo mavzuni aytgach "Darsni boshlash" tugmasi chiqadi
   function showLessonBtn() {
     if ($("lbtn")) return;
-    var b = document.createElement("a"); b.id = "lbtn"; b.className = "btn"; b.textContent = "📖 Darsni boshlash";
+    var b = document.createElement("a"); b.id = "lbtn"; b.className = "btn"; b.textContent = TI.h === 3 ? "📝 Testni boshlash" : "📖 Darsni boshlash";
     b.href = lessonUrl() || (botUrl.replace(/\?.*$/, "") + "?start=dars");
     b.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:calc(190px + env(safe-area-inset-bottom,0px));z-index:30;white-space:nowrap;width:auto;padding:12px 22px;box-shadow:0 6px 24px rgba(0,0,0,.35);text-decoration:none";
     b.addEventListener("click", function (e) {
@@ -677,8 +692,8 @@ var RumiyoAvatar = (function () {
     if (j && j.bot) botUrl = j.bot;
     var lb = $("lbtn"); if (lb && lb.parentNode) lb.parentNode.removeChild(lb);
     var intro = !!(j && j.intro);
-    if (intro) botUrl = botUrl.replace(/\?.*$/, "") + "?start=dars";
-    $("e-bot").textContent = intro ? "📖 Darsni boshlash" : "Botga qaytish";
+    if (intro && TI.h !== 3) botUrl = botUrl.replace(/\?.*$/, "") + "?start=dars";
+    $("e-bot").textContent = (j && j.later) ? "Botga qaytish" : intro ? (TI.h === 3 ? "📝 Testni boshlash" : "📖 Darsni boshlash") : "Botga qaytish";
     $("e-p").textContent = (j && j.cta) || "Botga qayting — darsni davom ettiring 👇";
     $("e-bot").href = botUrl; $("e-bot").dataset.go = "";
     if (intro && lessonUrl()) { $("e-bot").href = lessonUrl(); $("e-bot").dataset.go = "1"; }
@@ -852,6 +867,7 @@ var RumiyoAvatar = (function () {
       else if (o.t === "turn") { L.curMe = null; L.curAi = null; L.outText = ""; L.mood = "speak"; if (L.ptt && !L.talking) { micUI("idle"); state("Sizning navbatingiz: tugmani bosib gapiring"); } }
       else if (o.t === "left") { setLeft(o.left); }
       else if (o.t === "lesson_btn") { showLessonBtn(); }
+      else if (o.t === "later") { setTimeout(function () { liveCleanup(); finish({ later: true, cta: "Mayli, ertaga ko'rishamiz! Dars vaqti kelganda bot sizga yozadi 👋" }); }, 7000); }
       else if (o.t === "nolive") { liveFail(); }
       else if (o.t === "error") { liveCleanup(); state(o.error || "Xatolik"); try { if (TI && TI.h && lessonUrl()) showLessonBtn(); } catch (e) {} }
       else if (o.t === "done") { var d = o; setTimeout(function () { liveCleanup(); finish(d); }, 1500); }
