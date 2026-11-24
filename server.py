@@ -64,6 +64,7 @@ db.execute("PRAGMA journal_mode=WAL")
 db.execute("PRAGMA busy_timeout=5000")
 db.execute("CREATE TABLE IF NOT EXISTS use(user_id INTEGER, day TEXT, secs INTEGER DEFAULT 0, PRIMARY KEY(user_id, day))")
 db.execute("CREATE TABLE IF NOT EXISTS notes(user_id INTEGER PRIMARY KEY, text TEXT, ts INTEGER)")
+db.execute("CREATE TABLE IF NOT EXISTS lres(id INTEGER PRIMARY KEY AUTOINCREMENT, u INTEGER, lid INTEGER, s INTEGER, n INTEGER, ts INTEGER)")
 db.commit()
 
 
@@ -458,7 +459,7 @@ def get_session(info):
 
 
 # Ustoz = avatar (m1 erkak, f1 va f2 ayol) + xarakter (4 xil). O'quvchi bir marta tanlaydi, PICK_LOCK kundan keyin o'zgartirsa bo'ladi.
-AVATARS = {"m1": "m", "f1": "f", "f2": "f"}
+AVATARS = {"f1": "f"}   # faqat bitta ustoza qoldi; eski m1/f2 tanlovlari f1 ga o'tkaziladi
 PERSONAS = ("friendly", "angry", "fiery", "sweet")
 PICK_LOCK = int(float(os.getenv("PERSONA_LOCK_DAYS", "0")) * 86400)
 _VOICES = {
@@ -551,7 +552,7 @@ db.commit()
 
 def parse_persona(v):
     a, _, c = (v or "").partition(".")
-    return (a if a in AVATARS else None), (c if c in PERSONAS else None)
+    return ("f1" if a else None), (c if c in PERSONAS else None)
 
 
 def resolve_pick(uid, v=None, g=None):
@@ -559,7 +560,8 @@ def resolve_pick(uid, v=None, g=None):
     a, c = parse_persona(v)
     now = int(time.time())
     r = db.execute("SELECT avatar, char, ts FROM upick WHERE user_id=?", (uid,)).fetchone()
-    if r and r[0] in AVATARS and r[1] in PERSONAS:
+    if r and r[0] and r[1] in PERSONAS:
+        r = ("f1", r[1], r[2])
         left = max(0, r[2] + PICK_LOCK - now)
         if a and c and (a, c) != (r[0], r[1]) and left <= 0:
             db.execute("UPDATE upick SET avatar=?, char=?, ts=? WHERE user_id=?", (a, c, now, uid)); db.commit()
@@ -578,7 +580,7 @@ def resolve_pick(uid, v=None, g=None):
 def set_persona(info, ses, v, g=None):
     """Ustozni aniqlaydi (qulf serverda). Ustoz almashsa, oldingi gaplar tarixi tozalanadi (ohang aralashib ketmasin)."""
     a, c, _left = resolve_pick(int(info["u"]), v, g)
-    a, c = a or "m1", c or "friendly"
+    a, c = a or "f1", c or "friendly"
     key = (a, c)
     if ses.get("pk") not in (None, key):
         ses["hist"] = []; ses["asked"] = []; ses["quiz"] = None
@@ -1459,6 +1461,45 @@ async def ai_live(request):
     return ws
 
 
+def sign_token(d):
+    body = base64.urlsafe_b64encode(json.dumps(d, separators=(",", ":"), ensure_ascii=False).encode()).decode().rstrip("=")
+    return body + "." + hmac.new(SECRET.encode(), body.encode(), hashlib.sha256).hexdigest()
+
+
+async def lesson_result(request):
+    """Trener (sayt ichida) test natijasini qaytardi: saqlaymiz (bot oladi) va suhbat uchun yangi havola beramiz."""
+    try:
+        body = await request.json()
+        info = verify(body.get("token"))
+        r = json.loads(body.get("r") or "{}")
+        lid, sc, n = int(r["l"]), int(r["s"]), int(r["n"])
+    except Exception:
+        return web.json_response({"ok": False, "error": "bad"}, status=400)
+    if not info or int(info.get("i") or 0) != lid or n < 1 or not 0 <= sc <= n:
+        return web.json_response({"ok": False, "error": "bad"}, status=403)
+    uid = int(info["u"])
+    dup = db.execute("SELECT 1 FROM lres WHERE u=? AND lid=? AND s=? AND n=? AND ts>?", (uid, lid, sc, n, int(time.time()) - 600)).fetchone()
+    if not dup:
+        db.execute("INSERT INTO lres(u, lid, s, n, ts) VALUES(?,?,?,?,?)", (uid, lid, sc, n, int(time.time())))
+        db.commit()
+    new = dict(info)
+    new.pop("h", None)
+    new["s"], new["n"], new["e"] = sc, n, int(time.time()) + 86400
+    return web.json_response({"ok": True, "token": sign_token(new)})
+
+
+async def admin_results(request):
+    """Bot har ~20 soniyada yangi test natijalarini oladi (X-Secret = TALK_SECRET)."""
+    if not is_admin(request):
+        return denied()
+    try:
+        after = int(request.query.get("after", "0"))
+    except ValueError:
+        after = 0
+    rows = db.execute("SELECT id, u, lid, s, n FROM lres WHERE id>? ORDER BY id LIMIT 50", (after,)).fetchall()
+    return web.json_response({"results": [{"id": a, "u": b, "l": c, "s": d, "n": e} for a, b, c, d, e in rows]})
+
+
 # ---------- endpoints ----------
 async def ai_start(request):
     try:
@@ -1753,6 +1794,8 @@ def add_routes(app, prefix=""):
     """Rumiyo yo'llarini ilovaga qo'shadi. Suhbat serveriga ulanganda prefix='/rumiyo'."""
     p = prefix
     app.router.add_post(p + "/ai/start", ai_start)
+    app.router.add_post(p + "/lesson/result", lesson_result)
+    app.router.add_get(p + "/admin/results", admin_results)
     app.router.add_get(p + "/ai/live", ai_live)
     app.router.add_post(p + "/ai/turn", ai_turn)
     app.router.add_post(p + "/ai/end", ai_end)
@@ -1762,7 +1805,7 @@ def add_routes(app, prefix=""):
         resp = await handler(request)
         pth = request.path
         if ("/vrm/" in pth or "/media/" in pth) and resp.status == 200 and "Cache-Control" not in resp.headers:
-            resp.headers["Cache-Control"] = "public, max-age=604800, immutable" if request.query_string else "public, max-age=3600"
+            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable" if request.query_string else "public, max-age=3600"
         return resp
     app.middlewares.append(_cache_mw)
     app.router.add_post(p + "/ai/tts", ai_tts)

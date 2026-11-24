@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Rumiyo</title>
+<link rel="preload" href="vrm/rumiyo-vrm.js?v=6" as="script">
+<link rel="preload" href="vrm/ustoz-f1.vrm?v=3" as="fetch" crossorigin>
 <style>
 :root{--bg:#fff7ee;--bg2:#ffe9d2;--surf:#ffffff;--line:#f0d9c0;--tx:#2a1a10;--mut:#8a6a52;--acc:#e8590c;--acc2:#ffb703;--me:#fde3c8;--ok:#2b8a3e}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1b1410;--bg2:#271b14;--surf:#2a1e17;--line:#4a3527;--tx:#f8ebdd;--mut:#b99a80;--acc:#ff8a3d;--acc2:#ffc233;--me:#4a3220;--ok:#69db7c}}
@@ -127,13 +129,7 @@ body.stage .dock .link{color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.6)}
       </div>
     </div>
     <div class="pick" id="pick" role="group" aria-label="Ustoz tanlash">
-      <div class="gl">1. Ustoz ko'rinishi</div>
-      <div class="arow">
-        <button type="button" class="ac" data-a="m1" aria-pressed="false"><img src="vrm/th-m1.jpg" alt="Erkak ustoz" width="120" height="120"><b>Erkak ustoz</b></button>
-        <button type="button" class="ac" data-a="f1" aria-pressed="false"><img src="vrm/th-f1.jpg" alt="Ayol ustoza" width="120" height="120"><b>Ayol ustoza</b></button>
-        <button type="button" class="ac" data-a="f2" aria-pressed="false"><img src="vrm/th-f2.jpg" alt="Ayol ustoza" width="120" height="120"><b>Ayol ustoza</b></button>
-      </div>
-      <div class="gl">2. Xarakteri</div>
+      <div class="gl">Ustoza xarakteri</div>
       <div class="prow">
         <button type="button" class="pc" data-c="friendly" aria-pressed="false"><span class="e">😊</span><b>Do'stona</b><span>«Jonim» deb gaplashadi, hazil bilan o'rgatadi</span></button>
         <button type="button" class="pc" data-c="angry" aria-pressed="false"><span class="e">😠</span><b>Jahldor</b><span>Jahli tez, lekin juda kulgili</span></button>
@@ -174,7 +170,7 @@ body.stage .dock .link{color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.6)}
 </section>
 
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="vrm/rumiyo-vrm.js?v=5"></script>
+<script src="vrm/rumiyo-vrm.js?v=6"></script>
 <script>
 /* Rumiyo avatari: jahldor ustoz (2D, SVG). Ko'z pirpiraydi, ko'zlar sichqoncha/barmoqni kuzatadi,
    og'iz ovoz balandligiga qarab ochiladi, jahl/kulgi/yig'i/xursandlik holatlari silliq o'tadi. */
@@ -398,6 +394,27 @@ var RumiyoAvatar = (function () {
   var FLAG = EN ? "🇬🇧 " : "🇷🇺 ", LNAME = EN ? "inglizcha" : "ruscha";
   try { var _bd = document.createElement("p"); _bd.className = "note"; _bd.style.margin = "2px 0 6px"; _bd.textContent = (EN ? "🇬🇧 Ingliz tili" : "🇷🇺 Rus tili") + " · tilni botdagi «🌐 Tilni almashtirish» tugmasi o'zgartiradi"; var _ht = document.getElementById("h-title"); _ht.parentNode.insertBefore(_bd, _ht.nextSibling); } catch (e) {}
   if (EN) { var _t = document.getElementById("h-topic"); if (_t) _t.textContent = "Bugungi darsni inglizcha gaplashib mustahkamlaymiz. Mikrofonga ruxsat bering."; }
+  // havola ichidagi ma'lumot (h: 1 = kirish suhbati, 2 = to'g'ridan-to'g'ri darsga; x = dars manzili; i = dars raqami)
+  var TI = {};
+  function parseTI() { TI = {}; try { var _b2 = token.split(".")[0].replace(/-/g, "+").replace(/_/g, "/"); TI = JSON.parse(decodeURIComponent(escape(atob(_b2 + "===".slice((_b2.length + 3) % 4))))) || {}; } catch (e) {} }
+  parseTI();
+  // trenerga o'tish manzili: tg ma'lumoti (hash) ham beriladi, shunda trenerda progress (CloudStorage) saqlanadi; ret = qaytish manzili
+  function lessonUrl() {
+    if (!TI.x || !TI.i) return "";
+    var back = location.origin + location.pathname + "?t=" + token;
+    return TI.x + (TI.x.indexOf("?") < 0 ? "?" : "&") + "l=" + TI.i + "&ret=" + encodeURIComponent(back) + (location.hash || "");
+  }
+  if (TI.h === 2 && lessonUrl() && !/[?&]r=/.test(location.search)) { location.replace(lessonUrl()); }
+  // trenerdan qaytganda natija (r) serverga yuboriladi, suhbat uchun yangi havola olinadi
+  (function () {
+    var r = new URLSearchParams(location.search).get("r");
+    if (!r || !token) return;
+    fetch("lesson/result", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token, r: r }) })
+      .then(function (x) { return x.json(); })
+      .then(function (j) {
+        if (j && j.ok && j.token) { token = j.token; parseTI(); try { history.replaceState(null, "", location.pathname + "?t=" + encodeURIComponent(token) + location.hash); } catch (e) {} }
+      }).catch(function () {});
+  })();
   var botUrl = "https://t.me/rumiyo_bot";
   var mic = null, recorder = null, chunks = [], rec = false, busy = false, audio = null, tick = null, left = 0, ctx = null;
 
@@ -498,10 +515,10 @@ var RumiyoAvatar = (function () {
 
   // ---- avatar: 2D SVG ustoz; hissiyatga qarab yuzi o'zgaradi, og'zi ovozga mos ochiladi ----
   // 3D VRM avatar (WebGL); qurilmada WebGL yoki model yuklanmasa, 2D SVG avatarga o'tadi
-  var AV = { m1: { vrm: "vrm/ustoz-m1.vrm?v=3", s: "m" }, f1: { vrm: "vrm/ustoz-f1.vrm?v=3", s: "f" }, f2: { vrm: "vrm/ustoz-f2.vrm?v=3", s: "f" } };
+  var AV = { f1: { vrm: "vrm/ustoz-f1.vrm?v=3", s: "f" } };
   var CH = { friendly: { n: "Do'stona", cls: "fr" }, angry: { n: "Jahldor", cls: "" }, fiery: { n: "Ehtirosli", cls: "fi" }, sweet: { n: "Shirin so'z", cls: "sw" } };
-  var P = { a: "m1", c: "friendly" }, chosen = false, gender = "", lockLeft = 0, picking = false;
-  try { var sp = JSON.parse(localStorage.getItem("rumiyo_pick") || "null"); if (sp && AV[sp.a] && CH[sp.c]) { P = { a: sp.a, c: sp.c }; chosen = true; } } catch (e) {}
+  var P = { a: "f1", c: "friendly" }, chosen = false, gender = "", lockLeft = 0, picking = false;
+  try { var sp = JSON.parse(localStorage.getItem("rumiyo_pick") || "null"); if (sp && CH[sp.c]) { P = { a: "f1", c: sp.c }; chosen = true; } } catch (e) {}
   var persona = P.a + "." + P.c;     // serverga "avatar.xarakter" ko'rinishida ketadi
   function soft() { return P.c !== "angry"; }
   function tname() { return CH[P.c].n + (AV[P.a].s === "f" ? " ustoza" : " ustoz"); }
@@ -538,7 +555,7 @@ var RumiyoAvatar = (function () {
   }
   var avCur = "", avC = makeAv($("av")), avH = avC;
   avH.set("happy"); setTimeout(function () { avH.set("idle"); }, 1800);
-  var sel = { g: gender, a: chosen ? P.a : "", c: chosen ? P.c : "" };
+  var sel = { g: gender, a: "f1", c: chosen ? P.c : "" };
   function saveLocal() { try { localStorage.setItem("rumiyo_pick", JSON.stringify(P)); } catch (e) {} }
   function applyPick(fromUser) {
     persona = P.a + "." + P.c;
@@ -569,10 +586,10 @@ var RumiyoAvatar = (function () {
       applyPick(!!(d.a || d.c)); $("pickhint").hidden = true;
     };
   })(pbs[pi]);
-  $("b-chg").onclick = function () { picking = true; sel = { g: gender, a: P.a, c: P.c }; helloMode(); applyPick(false); };
+  $("b-chg").onclick = function () { picking = true; sel = { g: gender, a: "f1", c: P.c }; helloMode(); applyPick(false); };
   // Boshlash: tanlov to'liq bo'lmasa to'xtatadi; to'liq bo'lsa tanlovni qulflaydi (server ham 1 hafta o'zgartirtirmaydi)
   $("b-go").addEventListener("click", function (e) {
-    if (!sel.g || (!chosen || picking) && (!sel.a || !sel.c)) { e.stopImmediatePropagation(); $("pickhint").hidden = false; return; }
+    if (!sel.g || (!chosen || picking) && !sel.c) { e.stopImmediatePropagation(); $("pickhint").hidden = false; return; }
     if (!chosen || picking) lockLeft = 0;
     chosen = true; picking = false; saveLocal(); helloMode();
   }, true);
@@ -645,9 +662,10 @@ var RumiyoAvatar = (function () {
   function showLessonBtn() {
     if ($("lbtn")) return;
     var b = document.createElement("a"); b.id = "lbtn"; b.className = "btn"; b.textContent = "📖 Darsni boshlash";
-    b.href = botUrl.replace(/\?.*$/, "") + "?start=dars";
+    b.href = lessonUrl() || (botUrl.replace(/\?.*$/, "") + "?start=dars");
     b.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + env(safe-area-inset-bottom,0px));z-index:30;box-shadow:0 6px 24px rgba(0,0,0,.35);text-decoration:none";
     b.addEventListener("click", function (e) {
+      if (lessonUrl()) return;      // saytning o'zida: trenerga o'tadi
       try { var tw = window.Telegram && Telegram.WebApp; if (tw) { e.preventDefault(); if (tw.openTelegramLink) tw.openTelegramLink(b.href); setTimeout(function () { try { tw.close(); } catch (x) {} }, 250); } } catch (x) {}
     });
     document.body.appendChild(b);
@@ -661,7 +679,9 @@ var RumiyoAvatar = (function () {
     if (intro) botUrl = botUrl.replace(/\?.*$/, "") + "?start=dars";
     $("e-bot").textContent = intro ? "📖 Darsni boshlash" : "Botga qaytish";
     $("e-p").textContent = (j && j.cta) || "Botga qayting — darsni davom ettiring 👇";
-    $("e-bot").href = botUrl; show("s-end");
+    $("e-bot").href = botUrl; $("e-bot").dataset.go = "";
+    if (intro && lessonUrl()) { $("e-bot").href = lessonUrl(); $("e-bot").dataset.go = "1"; }
+    show("s-end");
   }
 
   function classicShow(j) {
@@ -980,6 +1000,7 @@ var RumiyoAvatar = (function () {
   $("b-mic").addEventListener("pointercancel", micRelease);
   $("b-mic").onclick = function () { if (live && !live.closed && live.ptt) return; micToggle(); };
   $("e-bot").addEventListener("click", function (e) {
+    if (e.currentTarget.dataset.go) return;      // trenerga o'tish: oddiy havola
     try { var tw = window.Telegram && Telegram.WebApp; if (tw) { e.preventDefault(); if (tw.openTelegramLink) tw.openTelegramLink(botUrl); setTimeout(function () { try { tw.close(); } catch (x) {} }, 250); } } catch (x) {}
   });
   $("b-end").onclick = function () {
