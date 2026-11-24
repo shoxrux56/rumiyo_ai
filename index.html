@@ -985,6 +985,8 @@ var RumiyoAvatar = (function () {
 
   try { if (window.Telegram && Telegram.WebApp) { Telegram.WebApp.ready(); Telegram.WebApp.expand(); } } catch (e) {}
   $("b-go").onclick = begin;
+  // Rumiyo jim bo'lib qolsa ham (Gemini/mikrofon ishlamasa) dars tugmasi 15 soniyadan keyin chiqadi: foydalanuvchi tiqilib qolmasin
+  try { if (TI && TI.h && lessonUrl()) setTimeout(showLessonBtn, 15000); } catch (e) {}
   try { navigator.permissions.query({ name: "microphone" }).then(function (r) { if (r.state === "granted" && !live && $("s-hello") && !$("s-hello").classList.contains("hide")) begin(); }).catch(function () {}); } catch (e) {}
   ["touchstart", "click"].forEach(function (ev) { document.addEventListener(ev, function () { try { if (window._pc && window._pc.state === "suspended") window._pc.resume(); if (live && live.pctx && live.pctx.state === "suspended") live.pctx.resume(); } catch (e) {} }, { passive: true }); });
   document.addEventListener("pointerdown", function () { try { if (live && live.pctx && live.pctx.state === "suspended") live.pctx.resume(); } catch (e) {} }, true);
