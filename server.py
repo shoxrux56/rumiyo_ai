@@ -143,7 +143,7 @@ KEYS_FILE = os.path.join(DATA_DIR, "keys.json")
 
 def keys(kind):
     env = {"groq": ("GROQ_API_KEYS", "GROQ_API_KEY"), "openrouter": ("OPENROUTER_API_KEYS", "OPENROUTER_API_KEY"),
-           "gemini": ("GEMINI_API_KEYS", "GEMINI_API_KEY")}[kind]
+           "gemini": ("GEMINI_API_KEYS", "GEMINI_API_KEY"), "gemini_paid": ("GEMINI_API_KEYS_PAID", "GEMINI_API_KEY_PAID")}[kind]
     ks = [k.strip() for k in (os.getenv(env[0], "") + "," + os.getenv(env[1], "")).split(",") if k.strip()]
     try:
         with open(KEYS_FILE, encoding="utf-8") as f:
@@ -1183,12 +1183,10 @@ LESSON_TOOLS = [{"functionDeclarations": [
 
 
 def paid_key():
-    """Pullik kalit: GEMINI_API_KEY_PAID, yoki (bot orqali) faqat BITTA Gemini kalit qo'yilgan bo'lsa, shu kalit pullik hisoblanadi."""
-    k = os.getenv("GEMINI_API_KEY_PAID", "").strip()
-    if k:
-        return k
-    ks = keys("gemini")
-    return ks[0] if len(ks) == 1 else ""
+    """Pullik kalit: botdagi «💎 Pullik kalit» bo'limi yoki GEMINI_API_KEY_PAID."""
+    ks = keys("gemini_paid")
+    return ks[0] if ks else ""
+
 
 LIVE_MODEL_PAID = os.getenv("LIVE_MODEL_PAID", "").strip() or LIVE_MODEL
 PREMIUM_DAYS = int(os.getenv("PREMIUM_DAYS", "3"))        # yangi o'quvchining dastlabki shuncha kuni kuchli model + pullik kalit
@@ -1870,7 +1868,7 @@ async def admin_keys(request):
             cur = json.load(f)
     except (OSError, ValueError):
         cur = {}
-    for kind in ("groq", "openrouter", "gemini"):
+    for kind in ("groq", "openrouter", "gemini", "gemini_paid"):
         v = d.get(kind)
         if isinstance(v, str):
             v = [v]
