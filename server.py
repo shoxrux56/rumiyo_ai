@@ -143,7 +143,8 @@ KEYS_FILE = os.path.join(DATA_DIR, "keys.json")
 
 def keys(kind):
     env = {"groq": ("GROQ_API_KEYS", "GROQ_API_KEY"), "openrouter": ("OPENROUTER_API_KEYS", "OPENROUTER_API_KEY"),
-           "gemini": ("GEMINI_API_KEYS", "GEMINI_API_KEY"), "gemini_paid": ("GEMINI_API_KEYS_PAID", "GEMINI_API_KEY_PAID")}[kind]
+           "gemini": ("GEMINI_API_KEYS", "GEMINI_API_KEY"), "gemini_paid": ("GEMINI_API_KEYS_PAID", "GEMINI_API_KEY_PAID"),
+           "gemini_strong": ("GEMINI_API_KEYS_STRONG", "GEMINI_API_KEY_STRONG")}[kind]
     ks = [k.strip() for k in (os.getenv(env[0], "") + "," + os.getenv(env[1], "")).split(",") if k.strip()]
     try:
         with open(KEYS_FILE, encoding="utf-8") as f:
@@ -1188,7 +1189,7 @@ def paid_key():
     return ks[0] if ks else ""
 
 
-LIVE_MODEL_PAID = os.getenv("LIVE_MODEL_PAID", "").strip() or "gemini-3.8-live-extended-thinking"   # chuqur fikrlaydigan variant (Google hujjati bo'yicha)
+LIVE_MODEL_PAID = os.getenv("LIVE_MODEL_STRONG", "").strip() or os.getenv("LIVE_MODEL_PAID", "").strip() or "gemini-3.8-live-extended-thinking"   # chuqur fikrlaydigan variant (Google hujjati bo'yicha)
 PREMIUM_DAYS = int(os.getenv("PREMIUM_DAYS", "3"))        # yangi o'quvchining dastlabki shuncha kuni kuchli model + pullik kalit
 
 
@@ -1220,15 +1221,15 @@ async def live_open(http, sysmsg, voice=None, tools=None, premium=False):
         setup["setup"]["realtimeInputConfig"] = {"automaticActivityDetection": {
             "startOfSpeechSensitivity": "START_SENSITIVITY_HIGH", "endOfSpeechSensitivity": "END_SENSITIVITY_LOW",
             "prefixPaddingMs": int(os.getenv("LIVE_PREFIX_MS", "300")), "silenceDurationMs": int(os.getenv("LIVE_SILENCE_MS", "1700"))}}
-    PAID_KEY = paid_key()
-    free = [k for k in rotated("gemini") if k != PAID_KEY]
-    if PAID_KEY and premium:
-        order = [(PAID_KEY, LIVE_MODEL_PAID)] + ([(PAID_KEY, LIVE_MODEL)] if LIVE_MODEL_PAID != LIVE_MODEL else []) + [(k, LIVE_MODEL) for k in free]
-        # yangi o'quvchi: pullik kalit + kuchli model; u band/xato bo'lsa o'sha kalitda arzon model, keyin tekin kalitlar
-    elif PAID_KEY and os.getenv("PAID_FALLBACK", "1") == "1":
-        order = [(k, LIVE_MODEL) for k in free] + [(PAID_KEY, LIVE_MODEL)]   # eski o'quvchi: avval tekin kalitlar, tugasa pullik kalitda arzon model
+    STRONG_KEY = (keys("gemini_strong") or [""])[0]       # yangi o'quvchining dastlabki kunlari uchun alohida kuchli kalit
+    PAID_KEY = paid_key()                                   # pullik kalit: arzon model, bepul tugaganda zaxira
+    free = [k for k in rotated("gemini") if k not in (STRONG_KEY, PAID_KEY)]
+    tail = [(k, LIVE_MODEL) for k in free] + ([(PAID_KEY, LIVE_MODEL)] if PAID_KEY else [])
+    if premium and STRONG_KEY:
+        order = [(STRONG_KEY, LIVE_MODEL_PAID)] + ([(STRONG_KEY, LIVE_MODEL)] if LIVE_MODEL_PAID != LIVE_MODEL else []) + tail
+        # yangi o'quvchi: kuchli kalit + kuchli model; band bo'lsa o'sha kalitda arzon model; keyin bepul, keyin pullik
     else:
-        order = [(k, LIVE_MODEL) for k in free] or ([(PAID_KEY, LIVE_MODEL)] if PAID_KEY else [])
+        order = tail          # eski o'quvchi: avval bepul kalitlar, kuchi yetmasa pullik kalit (arzon model); ikkalasi ham yetmasa oddiy rejim
     for k, mdl in order:
         if mdl == LIVE_MODEL_PAID != LIVE_MODEL and time.time() < STRONG["bad"]:
             continue                      # kuchli model yaqinda xato/limit bergan: 2 daqiqa arzon modelga o'tib turamiz
@@ -1892,7 +1893,7 @@ async def admin_keys(request):
             cur = json.load(f)
     except (OSError, ValueError):
         cur = {}
-    for kind in ("groq", "openrouter", "gemini", "gemini_paid"):
+    for kind in ("groq", "openrouter", "gemini", "gemini_paid", "gemini_strong"):
         v = d.get(kind)
         if isinstance(v, str):
             v = [v]
