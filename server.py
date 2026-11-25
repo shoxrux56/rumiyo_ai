@@ -1229,7 +1229,8 @@ async def live_open(http, sysmsg, voice=None, tools=None, premium=False):
         order = [(STRONG_KEY, LIVE_MODEL_PAID)] + ([(STRONG_KEY, LIVE_MODEL)] if LIVE_MODEL_PAID != LIVE_MODEL else []) + tail
         # yangi o'quvchi: kuchli kalit + kuchli model; band bo'lsa o'sha kalitda arzon model; keyin bepul, keyin pullik
     else:
-        order = tail          # eski o'quvchi: avval bepul kalitlar, kuchi yetmasa pullik kalit (arzon model); ikkalasi ham yetmasa oddiy rejim
+        order = tail + ([(STRONG_KEY, LIVE_MODEL)] if STRONG_KEY else [])
+        # eski o'quvchi: avval bepul kalitlar, kuchi yetmasa pullik kalit, u ham yetmasa oxirgi chora kuchli kalit (arzon model); hammasi yetmasa oddiy rejim
     for k, mdl in order:
         if mdl == LIVE_MODEL_PAID != LIVE_MODEL and time.time() < STRONG["bad"]:
             continue                      # kuchli model yaqinda xato/limit bergan: 2 daqiqa arzon modelga o'tib turamiz
