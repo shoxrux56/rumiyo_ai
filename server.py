@@ -1182,7 +1182,14 @@ LESSON_TOOLS = [{"functionDeclarations": [
     {"name": "end_today", "description": "Ends today's talk when the learner does NOT want to start a lesson now and will come back tomorrow. Call it right after the goodbye."}]}]
 
 
-PAID_KEY = os.getenv("GEMINI_API_KEY_PAID", "").strip()
+def paid_key():
+    """Pullik kalit: GEMINI_API_KEY_PAID, yoki (bot orqali) faqat BITTA Gemini kalit qo'yilgan bo'lsa, shu kalit pullik hisoblanadi."""
+    k = os.getenv("GEMINI_API_KEY_PAID", "").strip()
+    if k:
+        return k
+    ks = keys("gemini")
+    return ks[0] if len(ks) == 1 else ""
+
 LIVE_MODEL_PAID = os.getenv("LIVE_MODEL_PAID", "").strip() or LIVE_MODEL
 PREMIUM_DAYS = int(os.getenv("PREMIUM_DAYS", "3"))        # yangi o'quvchining dastlabki shuncha kuni kuchli model + pullik kalit
 
@@ -1209,6 +1216,7 @@ async def live_open(http, sysmsg, voice=None, tools=None, premium=False):
         setup["setup"]["realtimeInputConfig"] = {"automaticActivityDetection": {
             "startOfSpeechSensitivity": "START_SENSITIVITY_HIGH", "endOfSpeechSensitivity": "END_SENSITIVITY_LOW",
             "prefixPaddingMs": int(os.getenv("LIVE_PREFIX_MS", "300")), "silenceDurationMs": int(os.getenv("LIVE_SILENCE_MS", "1700"))}}
+    PAID_KEY = paid_key()
     free = [k for k in rotated("gemini") if k != PAID_KEY]
     if PAID_KEY and premium:
         order = [PAID_KEY] + free                      # yangi o'quvchi: pullik kalit va kuchli model birinchi
