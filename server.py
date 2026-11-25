@@ -1188,7 +1188,7 @@ def paid_key():
     return ks[0] if ks else ""
 
 
-LIVE_MODEL_PAID = os.getenv("LIVE_MODEL_PAID", "").strip() or LIVE_MODEL
+LIVE_MODEL_PAID = os.getenv("LIVE_MODEL_PAID", "").strip() or "gemini-3.8-live-extended-thinking"   # chuqur fikrlaydigan variant (Google hujjati bo'yicha)
 PREMIUM_DAYS = int(os.getenv("PREMIUM_DAYS", "3"))        # yangi o'quvchining dastlabki shuncha kuni kuchli model + pullik kalit
 
 
@@ -1230,6 +1230,9 @@ async def live_open(http, sysmsg, voice=None, tools=None, premium=False):
         order = [(k, LIVE_MODEL) for k in free] or ([(PAID_KEY, LIVE_MODEL)] if PAID_KEY else [])
     for k, mdl in order:
         setup["setup"]["model"] = "models/" + mdl
+        if tools:
+            nb = "extended" in mdl      # chuqur fikrlash varianti faqat bloklanmaydigan funksiya chaqiruvlarini qo'llaydi
+            setup["setup"]["tools"] = [{"functionDeclarations": [dict(fd, **({"behavior": "NON_BLOCKING"} if nb else {})) for fd in t["functionDeclarations"]]} for t in tools]
         up = None
         try:
             up = await http.ws_connect(f"{GEMINI_WS}?key={k}", max_msg_size=0, heartbeat=20, timeout=aiohttp.ClientWSTimeout(ws_close=10) if hasattr(aiohttp, "ClientWSTimeout") else 10)
@@ -1237,7 +1240,7 @@ async def live_open(http, sysmsg, voice=None, tools=None, premium=False):
             msg = await asyncio.wait_for(up.receive(), timeout=12)
             data = msg.data.decode("utf-8", "ignore") if isinstance(msg.data, (bytes, bytearray)) else (msg.data or "")
             if msg.type in (aiohttp.WSMsgType.TEXT, aiohttp.WSMsgType.BINARY) and "setupComplete" in data:
-                return up, k
+                return up, k, mdl
             print("LIVE setup rad etildi:", str(data)[:240].replace("\n", " "), "| close:", getattr(up, "close_code", None))
             LAST_ERR["live"] = str(data)[:110].replace("\n", " ") or ("close %s" % getattr(up, "close_code", ""))
             if "API key" in str(data) or "PERMISSION" in str(data) or "UNAUTH" in str(data):
@@ -1396,7 +1399,9 @@ async def ai_live(request):
         if not opened:
             release()
             await j({"t": "nolive", "why": "; ".join("%s %s" % kv for kv in LAST_ERR.items())[:200]}); await ws.close(); return ws
-        up, _k = opened
+        up, _k, _mdl = opened
+        ext = "extended" in _mdl
+        print("LIVE model:", _mdl, "| premium:", prem)
         again = bool(ses["hist"])
         opener = opener_for(persona, again, ses)
         if mode == 3:
@@ -1478,7 +1483,7 @@ async def ai_live(request):
                         state["later_pending"] = True
                         db.execute("UPDATE pres SET later=1, decided=1 WHERE id=(SELECT MAX(id) FROM pres WHERE u=?)", (uid,)); db.commit()
                     try:
-                        await up.send_str(json.dumps({"toolResponse": {"functionResponses": [{"id": fc.get("id"), "name": fc.get("name"), "response": {"result": "ok"}}]}}))
+                        await up.send_str(json.dumps({"toolResponse": {"functionResponses": [{"id": fc.get("id"), "name": fc.get("name"), "response": {"result": "ok"}, **({"scheduling": "SILENT"} if ext else {})}]}}))
                     except Exception:
                         pass
                 sc = o.get("serverContent") or {}
