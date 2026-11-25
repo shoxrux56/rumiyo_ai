@@ -679,6 +679,7 @@ ABOUT THE SYSTEM (all true; proudly tell the learner about it in your own words,
 - The Telegram bot keeps the daily rhythm: it opens the lesson, checks the test results, reminds when the next lesson is ready and counts the learner's progress. The AI and the algorithm work together: the algorithm decides WHAT to repeat and WHEN, Rumiyo makes it alive and fun.
 """
 
+NONLAT_RE = re.compile(r"[^\u0000-\u024F\u02B0-\u02FF\u0300-\u036F\u0400-\u04FF\u2000-\u206F\u2190-\u21FF\U0001F000-\U0001FAFF\u2600-\u27BF]")
 TAGS_RE = re.compile(r"<[A-Za-z/][^>]{0,40}>|\{[^}]{0,40}\}")
 
 PLACE_RULES = """
@@ -1506,6 +1507,8 @@ async def ai_live(request):
                         state["last"] = time.time()
                         await ws.send_bytes(pcm)
                 it = TAGS_RE.sub("", (sc.get("inputTranscription") or {}).get("text") or "")   # <noise>, {pause} kabi xom belgilar matnga tushmasin
+                if NONLAT_RE.search(it):
+                    it = ""          # tanish tizimi o'zbekchani hind/arab yozuvida "eshitsa", ekranga va tarixga chiqarmaymiz (Rumiyo ovozni o'zi tushunadi)
                 if it.strip():
                     if state["cur_out"].strip():
                         await flush_turn()
@@ -1530,7 +1533,7 @@ async def ai_live(request):
                 if sc.get("turnComplete"):
                     await flush_turn()
                     await j({"t": "turn"})
-                    if intro and mode != 4 and not state.get("btn_pending") and re.search(r"tugma|darsga o.t|darsni boshla|omad", state.get("last_out", ""), re.I):
+                    if intro and mode not in (3, 4) and not state.get("btn_pending") and re.search(r"pastdagi tugma|tugmani bos|darsga o.tamiz|darsni boshlaymiz|\bomad\b", state.get("last_out", ""), re.I):
                         state["btn_pending"] = True      # Rumiyo funksiyani chaqirmasa ham "darsga o'tamiz" desa, tugma chiqadi
                     state["last_out"] = ""
                     if state.get("later_pending") and not state["btn"]:
