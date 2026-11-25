@@ -64,6 +64,7 @@ db.execute("PRAGMA journal_mode=WAL")
 db.execute("PRAGMA busy_timeout=5000")
 db.execute("CREATE TABLE IF NOT EXISTS use(user_id INTEGER, day TEXT, secs INTEGER DEFAULT 0, PRIMARY KEY(user_id, day))")
 db.execute("CREATE TABLE IF NOT EXISTS notes(user_id INTEGER PRIMARY KEY, text TEXT, ts INTEGER)")
+db.execute("CREATE TABLE IF NOT EXISTS sess(user_id INTEGER, day TEXT, PRIMARY KEY(user_id, day))")
 db.execute("CREATE TABLE IF NOT EXISTS pres(id INTEGER PRIMARY KEY AUTOINCREMENT, u INTEGER, level TEXT, raw TEXT, later INTEGER DEFAULT 0, decided INTEGER DEFAULT 0, ts INTEGER)")
 db.execute("CREATE TABLE IF NOT EXISTS lres(id INTEGER PRIMARY KEY AUTOINCREMENT, u INTEGER, lid INTEGER, s INTEGER, n INTEGER, ts INTEGER)")
 db.commit()
@@ -1181,7 +1182,19 @@ LESSON_TOOLS = [{"functionDeclarations": [
     {"name": "end_today", "description": "Ends today's talk when the learner does NOT want to start a lesson now and will come back tomorrow. Call it right after the goodbye."}]}]
 
 
-async def live_open(http, sysmsg, voice=None, tools=None):
+PAID_KEY = os.getenv("GEMINI_API_KEY_PAID", "").strip()
+LIVE_MODEL_PAID = os.getenv("LIVE_MODEL_PAID", "").strip() or LIVE_MODEL
+PREMIUM_DAYS = int(os.getenv("PREMIUM_DAYS", "3"))        # yangi o'quvchining dastlabki shuncha kuni kuchli model + pullik kalit
+
+
+def is_premium(uid):
+    """Rumiyo bilan gaplashgan kunlari soni PREMIUM_DAYS dan oshmagan odam = yangi."""
+    d = datetime.now(TZ).strftime("%Y-%m-%d")
+    db.execute("INSERT OR IGNORE INTO sess(user_id, day) VALUES(?,?)", (uid, d)); db.commit()
+    return db.execute("SELECT COUNT(*) FROM sess WHERE user_id=?", (uid,)).fetchone()[0] <= PREMIUM_DAYS
+
+
+async def live_open(http, sysmsg, voice=None, tools=None, premium=False):
     """Kalitlarni aylanib Gemini Live'ga ulanadi; (ws, kalit) yoki None."""
     setup = {"setup": {"model": "models/" + LIVE_MODEL,
                        "generationConfig": {"responseModalities": ["AUDIO"],
@@ -1196,7 +1209,15 @@ async def live_open(http, sysmsg, voice=None, tools=None):
         setup["setup"]["realtimeInputConfig"] = {"automaticActivityDetection": {
             "startOfSpeechSensitivity": "START_SENSITIVITY_HIGH", "endOfSpeechSensitivity": "END_SENSITIVITY_LOW",
             "prefixPaddingMs": int(os.getenv("LIVE_PREFIX_MS", "300")), "silenceDurationMs": int(os.getenv("LIVE_SILENCE_MS", "1700"))}}
-    for k in rotated("gemini"):
+    free = [k for k in rotated("gemini") if k != PAID_KEY]
+    if PAID_KEY and premium:
+        order = [PAID_KEY] + free                      # yangi o'quvchi: pullik kalit va kuchli model birinchi
+    elif PAID_KEY and os.getenv("PAID_FALLBACK", "1") == "1":
+        order = free + [PAID_KEY]                      # eski o'quvchi: avval tekin kalitlar, tugasa pullik zaxira
+    else:
+        order = free or ([PAID_KEY] if PAID_KEY else [])
+    for k in order:
+        setup["setup"]["model"] = "models/" + (LIVE_MODEL_PAID if k == PAID_KEY else LIVE_MODEL)
         up = None
         try:
             up = await http.ws_connect(f"{GEMINI_WS}?key={k}", max_msg_size=0, heartbeat=20, timeout=aiohttp.ClientWSTimeout(ws_close=10) if hasattr(aiohttp, "ClientWSTimeout") else 10)
@@ -1353,7 +1374,7 @@ async def ai_live(request):
     t0 = time.time()
     turns = []        # [("u"|"a", matn)]
     async with aiohttp.ClientSession() as http:
-        opened = await live_open(http, sysmsg, persona_voice(ses.get("sex"), persona), LESSON_TOOLS if intro else None)
+        opened = await live_open(http, sysmsg, persona_voice(ses.get("sex"), persona), LESSON_TOOLS if intro else None, is_premium(uid))
         if not opened:
             await j({"t": "nolive", "why": "; ".join("%s %s" % kv for kv in LAST_ERR.items())[:200]}); await ws.close(); return ws
         up, _k = opened
