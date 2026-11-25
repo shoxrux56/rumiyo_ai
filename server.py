@@ -1217,7 +1217,7 @@ async def live_open(http, sysmsg, voice=None, tools=None, premium=False):
     else:
         order = free or ([PAID_KEY] if PAID_KEY else [])
     for k in order:
-        setup["setup"]["model"] = "models/" + (LIVE_MODEL_PAID if k == PAID_KEY else LIVE_MODEL)
+        setup["setup"]["model"] = "models/" + (LIVE_MODEL_PAID if (k == PAID_KEY and premium) else LIVE_MODEL)   # kuchli model faqat yangi o'quvchiga
         up = None
         try:
             up = await http.ws_connect(f"{GEMINI_WS}?key={k}", max_msg_size=0, heartbeat=20, timeout=aiohttp.ClientWSTimeout(ws_close=10) if hasattr(aiohttp, "ClientWSTimeout") else 10)
