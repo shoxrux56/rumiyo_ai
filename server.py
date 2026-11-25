@@ -1195,7 +1195,7 @@ PREMIUM_DAYS = int(os.getenv("PREMIUM_DAYS", "3"))        # yangi o'quvchining d
 LIVE_ACTIVE = {"all": 0, "prem": 0}
 STRONG = {"bad": 0.0}      # kuchli model yana qachongacha o'tkazib yuboriladi
 PREMIUM_MAX = int(os.getenv("PREMIUM_MAX", "8"))      # bir vaqtda kuchli modeldagi suhbatlar soni; oshsa yangilar ham arzon modelda gaplashadi
-LIVE_MAX = int(os.getenv("LIVE_MAX", "40"))           # umumiy bir vaqtdagi suhbatlar chegarasi; oshsa navbatdagi odam "band" xabarini oladi
+LIVE_MAX = int(os.getenv("LIVE_MAX", "0"))            # 0 = umumiy chegara yo'q (istagancha odam kiradi); son qo'ysangiz, oshganda navbatdagi odam "band" oladi
 
 
 def is_premium(uid):
@@ -1393,7 +1393,7 @@ async def ai_live(request):
                    "Do NOT greet again and do not speak first: stay silent and wait; when the learner speaks, answer them directly, continuing naturally from that greeting.")
     t0 = time.time()
     turns = []        # [("u"|"a", matn)]
-    if LIVE_ACTIVE["all"] >= LIVE_MAX:
+    if LIVE_MAX and LIVE_ACTIVE["all"] >= LIVE_MAX:
         await j({"t": "nolive", "why": "band"}); await ws.close(); return ws
     prem = is_premium(uid) and LIVE_ACTIVE["prem"] < PREMIUM_MAX
     LIVE_ACTIVE["all"] += 1
