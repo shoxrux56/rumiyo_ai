@@ -1192,6 +1192,11 @@ LIVE_MODEL_PAID = os.getenv("LIVE_MODEL_PAID", "").strip() or LIVE_MODEL
 PREMIUM_DAYS = int(os.getenv("PREMIUM_DAYS", "3"))        # yangi o'quvchining dastlabki shuncha kuni kuchli model + pullik kalit
 
 
+LIVE_ACTIVE = {"all": 0, "prem": 0}
+PREMIUM_MAX = int(os.getenv("PREMIUM_MAX", "8"))      # bir vaqtda kuchli modeldagi suhbatlar soni; oshsa yangilar ham arzon modelda gaplashadi
+LIVE_MAX = int(os.getenv("LIVE_MAX", "40"))           # umumiy bir vaqtdagi suhbatlar chegarasi; oshsa navbatdagi odam "band" xabarini oladi
+
+
 def is_premium(uid):
     """Rumiyo bilan gaplashgan kunlari soni PREMIUM_DAYS dan oshmagan odam = yangi."""
     d = datetime.now(TZ).strftime("%Y-%m-%d")
@@ -1217,13 +1222,14 @@ async def live_open(http, sysmsg, voice=None, tools=None, premium=False):
     PAID_KEY = paid_key()
     free = [k for k in rotated("gemini") if k != PAID_KEY]
     if PAID_KEY and premium:
-        order = [PAID_KEY] + free                      # yangi o'quvchi: pullik kalit va kuchli model birinchi
+        order = [(PAID_KEY, LIVE_MODEL_PAID)] + ([(PAID_KEY, LIVE_MODEL)] if LIVE_MODEL_PAID != LIVE_MODEL else []) + [(k, LIVE_MODEL) for k in free]
+        # yangi o'quvchi: pullik kalit + kuchli model; u band/xato bo'lsa o'sha kalitda arzon model, keyin tekin kalitlar
     elif PAID_KEY and os.getenv("PAID_FALLBACK", "1") == "1":
-        order = free + [PAID_KEY]                      # eski o'quvchi: avval tekin kalitlar, tugasa pullik zaxira
+        order = [(k, LIVE_MODEL) for k in free] + [(PAID_KEY, LIVE_MODEL)]   # eski o'quvchi: avval tekin kalitlar, tugasa pullik kalitda arzon model
     else:
-        order = free or ([PAID_KEY] if PAID_KEY else [])
-    for k in order:
-        setup["setup"]["model"] = "models/" + (LIVE_MODEL_PAID if (k == PAID_KEY and premium) else LIVE_MODEL)   # kuchli model faqat yangi o'quvchiga
+        order = [(k, LIVE_MODEL) for k in free] or ([(PAID_KEY, LIVE_MODEL)] if PAID_KEY else [])
+    for k, mdl in order:
+        setup["setup"]["model"] = "models/" + mdl
         up = None
         try:
             up = await http.ws_connect(f"{GEMINI_WS}?key={k}", max_msg_size=0, heartbeat=20, timeout=aiohttp.ClientWSTimeout(ws_close=10) if hasattr(aiohttp, "ClientWSTimeout") else 10)
@@ -1379,9 +1385,16 @@ async def ai_live(request):
                    "Do NOT greet again and do not speak first: stay silent and wait; when the learner speaks, answer them directly, continuing naturally from that greeting.")
     t0 = time.time()
     turns = []        # [("u"|"a", matn)]
+    if LIVE_ACTIVE["all"] >= LIVE_MAX:
+        await j({"t": "nolive", "why": "band"}); await ws.close(); return ws
+    prem = is_premium(uid) and LIVE_ACTIVE["prem"] < PREMIUM_MAX
+    LIVE_ACTIVE["all"] += 1
+    LIVE_ACTIVE["prem"] += int(prem)
+    release = lambda: LIVE_ACTIVE.update(all=max(0, LIVE_ACTIVE["all"] - 1), prem=max(0, LIVE_ACTIVE["prem"] - int(prem)))
     async with aiohttp.ClientSession() as http:
-        opened = await live_open(http, sysmsg, persona_voice(ses.get("sex"), persona), LESSON_TOOLS if intro else None, is_premium(uid))
+        opened = await live_open(http, sysmsg, persona_voice(ses.get("sex"), persona), LESSON_TOOLS if intro else None, prem)
         if not opened:
+            release()
             await j({"t": "nolive", "why": "; ".join("%s %s" % kv for kv in LAST_ERR.items())[:200]}); await ws.close(); return ws
         up, _k = opened
         again = bool(ses["hist"])
@@ -1545,6 +1558,7 @@ async def ai_live(request):
         try:
             await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         finally:
+            release()
             for t in tasks:
                 t.cancel()
             await flush_turn()
@@ -1883,7 +1897,7 @@ async def admin_stats(request):
     if not is_admin(request):
         return denied()
     n, secs = db.execute("SELECT COUNT(*), COALESCE(SUM(secs),0) FROM use WHERE day=?", (today(),)).fetchone()
-    return web.json_response({"pairs": G.count(), "today_users": n, "today_secs": secs, "sessions": len(SES),
+    return web.json_response({"pairs": G.count(), "today_users": n, "today_secs": secs, "sessions": len(SES), "live": dict(LIVE_ACTIVE),
                               "keys": {k: len(keys(k)) for k in ("groq", "openrouter", "gemini")}})
 
 
