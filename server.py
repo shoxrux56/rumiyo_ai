@@ -1193,6 +1193,7 @@ PREMIUM_DAYS = int(os.getenv("PREMIUM_DAYS", "3"))        # yangi o'quvchining d
 
 
 LIVE_ACTIVE = {"all": 0, "prem": 0}
+STRONG = {"bad": 0.0}      # kuchli model yana qachongacha o'tkazib yuboriladi
 PREMIUM_MAX = int(os.getenv("PREMIUM_MAX", "8"))      # bir vaqtda kuchli modeldagi suhbatlar soni; oshsa yangilar ham arzon modelda gaplashadi
 LIVE_MAX = int(os.getenv("LIVE_MAX", "40"))           # umumiy bir vaqtdagi suhbatlar chegarasi; oshsa navbatdagi odam "band" xabarini oladi
 
@@ -1229,6 +1230,8 @@ async def live_open(http, sysmsg, voice=None, tools=None, premium=False):
     else:
         order = [(k, LIVE_MODEL) for k in free] or ([(PAID_KEY, LIVE_MODEL)] if PAID_KEY else [])
     for k, mdl in order:
+        if mdl == LIVE_MODEL_PAID != LIVE_MODEL and time.time() < STRONG["bad"]:
+            continue                      # kuchli model yaqinda xato/limit bergan: 2 daqiqa arzon modelga o'tib turamiz
         setup["setup"]["model"] = "models/" + mdl
         if tools:
             nb = "extended" in mdl      # chuqur fikrlash varianti faqat bloklanmaydigan funksiya chaqiruvlarini qo'llaydi
@@ -1250,6 +1253,8 @@ async def live_open(http, sysmsg, voice=None, tools=None, premium=False):
             LAST_ERR["live"] = "%s %s" % (type(e).__name__, str(e)[:90])
         if up is not None and not up.closed:
             await up.close()
+        if mdl == LIVE_MODEL_PAID != LIVE_MODEL:
+            STRONG["bad"] = time.time() + 120
     return None
 
 
