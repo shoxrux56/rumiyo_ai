@@ -1644,11 +1644,9 @@ async def placement_result(request):
         level = "A1"
     uid = int(info["u"])
     raw = json.dumps(r, ensure_ascii=False)[:2000]
-    dup = db.execute("SELECT id FROM pres WHERE u=? AND ts>?", (uid, int(time.time()) - 3600)).fetchone()
-    if dup:
-        db.execute("UPDATE pres SET level=?, raw=? WHERE id=?", (level, raw, dup[0]))
-    else:
-        db.execute("INSERT INTO pres(u, level, raw, ts) VALUES(?,?,?,?)", (uid, level, raw, int(time.time())))
+    # qayta topshirilsa eski qator o'chadi va YANGI raqam bilan yoziladi: bot "o'qilgan" raqamdan keyingilarni oladi, yangi natija yo'qolmaydi
+    db.execute("DELETE FROM pres WHERE u=? AND ts>?", (uid, int(time.time()) - 3600))
+    db.execute("INSERT INTO pres(u, level, raw, ts) VALUES(?,?,?,?)", (uid, level, raw, int(time.time())))
     db.commit()
     new = dict(info)
     new["h"], new["l"], new["e"] = 4, level, int(time.time()) + 86400
