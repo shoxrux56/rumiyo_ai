@@ -11,6 +11,7 @@ Kalitlar FAQAT muhit o'zgaruvchilarida (Render -> Environment), kodga yoki GitHu
 import asyncio, io, wave, base64, difflib, hashlib, hmac, json, os, random, re, sqlite3, time
 from datetime import datetime, timedelta, timezone
 
+import urllib.parse
 import aiohttp
 from aiohttp import web
 from dotenv import load_dotenv
@@ -1914,16 +1915,64 @@ VOICE_DIR = os.path.join(DATA_DIR, "voice_cache")
 VOICE_EMO = {"angry": "angry", "friendly": "happy", "sweet": "happy", "fiery": "normal"}
 
 
+VOICE_TONE = {
+    "friendly": "iliq, mehribon, hazilkash do'st; hech qachon jahl qilmaydi",
+    "angry": "jahldor, lekin kulgili: o'ynab ta'na qiladi va xafa bo'lgandek qiladi, oxirida mehr bilan chaqiradi; haqorat qilmaydi",
+    "sweet": "shirin so'z, erkalaydigan, yumshoq va quvnoq",
+    "fiery": "ehtirosli, past va sirli ohangda, jozibali, lekin odobli",
+}
+
+
+def clean_say(t):
+    """Modeldan kelgan gapni ovoz uchun tozalaydi: belgilar, emoji, qo'shtirnoq va ro'yxat belgilarisiz, 1-3 qisqa gap."""
+    t = re.sub(r"[*_#`>\[\]{}<]|[\U0001F000-\U0001FAFF\u2600-\u27BF]", "", t or "")
+    t = re.sub(r"^[\s\"'«»“”-]+|[\s\"'«»“”]+$", "", t)
+    return re.sub(r"\s+", " ", t).strip()[:400]
+
+
+async def voice_say(ctx, persona):
+    """Rumiyoning o'zi shu odamga, shu vaziyatda nima deyishini o'ylab topadi (xotira + dars holati). Muvaffaqiyatsiz bo'lsa None."""
+    name = str(ctx.get("name") or "").strip()[:40]
+    idle = int(ctx.get("idle_hours") or 0)
+    days = max(1, round(idle / 24)) if idle >= 12 else 0
+    lines = ["Sen Rumiyosan: o'zbek tilida so'zlashuvchilarga rus/ingliz tilini o'rgatadigan jonli sun'iy intellekt ustoza.",
+             "Hozir shu o'quvchiga Telegram'da QISQA OVOZLI XABAR yuboryapsan: u darsga kirmayapti, uni darsga qaytar.",
+             "Ohang: " + VOICE_TONE.get(persona, VOICE_TONE["friendly"]) + ".",
+             "Faqat gapirib aytiladigan matnni yoz: 1-3 qisqa gap, jami 40 so'zdan oshmasin, sof o'zbekcha, emoji, belgi, qo'shtirnoq, ro'yxat yo'q.",
+             "Har safar BOSHQACHA ayt: oldingi gaplarni takrorlama, jonli odamdek, hazil yoki mehr bilan. Oxirida bugun darsga kirishga chaqir.",
+             "Faktlar: " + ("ismi " + name + "; " if name else "") +
+             (f"darsga {days} kundan beri kirmagan; " if days else "bugungi dars tayyor; ") +
+             ("hozirgacha %s ta dars tugatgan; " % ctx["done"] if ctx.get("done") is not None else "") +
+             ("darajasi %s; " % ctx["level"] if ctx.get("level") else "") +
+             ("maqsadi: %s; " % ctx["goal"] if ctx.get("goal") else "") +
+             ("o'rganayotgan tili: %s; " % ctx["lang"] if ctx.get("lang") else "") +
+             "Faktni to'qima, bilmaganingni aytma. Ismini aytganda bir martagina ayt."]
+    notes = get_notes(int(ctx["uid"])) if str(ctx.get("uid") or "").isdigit() else ""
+    if notes:
+        lines.append("U haqida eslab qolganlaring (kerak bo'lsa tabiiy ishlat, sanab o'tirma): " + notes[:600])
+    msgs = [{"role": "system", "content": "\n".join(lines)}, {"role": "user", "content": "Ovozli xabar matnini yoz."}]
+    try:
+        t = clean_say(await asyncio.wait_for(llm(msgs, 1.0), 30))
+    except Exception as e:
+        print("ovozli matn o'ylab topilmadi:", type(e).__name__, str(e)[:100])
+        return None
+    return t if 12 <= len(t) <= 400 else None
+
+
 async def admin_voice(request):
-    """Bot Rumiyo ovozida qisqa ovozli xabar (MP3) so'raydi: {"text": "...", "persona": "friendly"}. Bir xil matn qayta yaratilmaydi."""
+    """Bot Rumiyo ovozida qisqa ovozli xabar (MP3) so'raydi.
+    {"text": "...", "persona": "friendly"} yoki {"ctx": {...}, "text": "zaxira matn"}: ctx bo'lsa Rumiyoning o'zi vaziyatga qarab gap o'ylab topadi."""
     if not is_admin(request):
         return denied()
     try:
         b = await request.json()
         text = re.sub(r"\s+", " ", str(b.get("text") or "")).strip()[:600]
         persona = b.get("persona") if b.get("persona") in VOICE_EMO else "friendly"
+        ctx = b.get("ctx") if isinstance(b.get("ctx"), dict) else None
     except Exception:
         return web.json_response({"ok": False, "error": "bad"}, status=400)
+    if ctx:
+        text = (await voice_say(ctx, persona)) or text      # model javob bermasa, botning zaxira matni
     if not text:
         return web.json_response({"ok": False, "error": "empty"}, status=400)
     path = os.path.join(VOICE_DIR, hashlib.md5((persona + "|" + text).encode()).hexdigest() + ".mp3")
@@ -1934,7 +1983,7 @@ async def admin_voice(request):
             with open(path, "wb") as f:
                 f.write(data)
         with open(path, "rb") as f:
-            return web.Response(body=f.read(), content_type="audio/mpeg")
+            return web.Response(body=f.read(), content_type="audio/mpeg", headers={"X-Text": urllib.parse.quote(text)})
     except Exception as e:
         print("ovozli xabar yaratilmadi:", type(e).__name__, str(e)[:120])
         return web.json_response({"ok": False, "error": "tts"}, status=502)
