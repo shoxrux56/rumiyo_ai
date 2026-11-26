@@ -1910,6 +1910,36 @@ async def admin_keys(request):
     return web.json_response({"ok": True, **{k: len(keys(k)) for k in ("groq", "openrouter", "gemini")}})
 
 
+VOICE_DIR = os.path.join(DATA_DIR, "voice_cache")
+VOICE_EMO = {"angry": "angry", "friendly": "happy", "sweet": "happy", "fiery": "normal"}
+
+
+async def admin_voice(request):
+    """Bot Rumiyo ovozida qisqa ovozli xabar (MP3) so'raydi: {"text": "...", "persona": "friendly"}. Bir xil matn qayta yaratilmaydi."""
+    if not is_admin(request):
+        return denied()
+    try:
+        b = await request.json()
+        text = re.sub(r"\s+", " ", str(b.get("text") or "")).strip()[:600]
+        persona = b.get("persona") if b.get("persona") in VOICE_EMO else "friendly"
+    except Exception:
+        return web.json_response({"ok": False, "error": "bad"}, status=400)
+    if not text:
+        return web.json_response({"ok": False, "error": "empty"}, status=400)
+    path = os.path.join(VOICE_DIR, hashlib.md5((persona + "|" + text).encode()).hexdigest() + ".mp3")
+    try:
+        if not os.path.exists(path):
+            data = await asyncio.wait_for(tts(text, VOICE_EMO[persona], UZ_VOICE), 40)
+            os.makedirs(VOICE_DIR, exist_ok=True)
+            with open(path, "wb") as f:
+                f.write(data)
+        with open(path, "rb") as f:
+            return web.Response(body=f.read(), content_type="audio/mpeg")
+    except Exception as e:
+        print("ovozli xabar yaratilmadi:", type(e).__name__, str(e)[:120])
+        return web.json_response({"ok": False, "error": "tts"}, status=502)
+
+
 async def admin_stats(request):
     if not is_admin(request):
         return denied()
@@ -1998,6 +2028,7 @@ def add_routes(app, prefix=""):
     app.router.add_get(p + "/admin/count", admin_count)
     app.router.add_get(p + "/admin/export", admin_export)
     app.router.add_post(p + "/admin/keys", admin_keys)
+    app.router.add_post(p + "/admin/voice", admin_voice)
     app.router.add_get(p + "/admin/stats", admin_stats)
     app.router.add_get(p + "/admin/selftest", admin_selftest)
     app.router.add_get(p + "/", page)
