@@ -68,6 +68,10 @@ db.execute("CREATE TABLE IF NOT EXISTS notes(user_id INTEGER PRIMARY KEY, text T
 db.execute("CREATE TABLE IF NOT EXISTS sess(user_id INTEGER, day TEXT, PRIMARY KEY(user_id, day))")
 db.execute("CREATE TABLE IF NOT EXISTS pres(id INTEGER PRIMARY KEY AUTOINCREMENT, u INTEGER, level TEXT, raw TEXT, later INTEGER DEFAULT 0, decided INTEGER DEFAULT 0, ts INTEGER)")
 db.execute("CREATE TABLE IF NOT EXISTS lres(id INTEGER PRIMARY KEY AUTOINCREMENT, u INTEGER, lid INTEGER, s INTEGER, n INTEGER, ts INTEGER)")
+try:
+    db.execute("ALTER TABLE lres ADD COLUMN w TEXT")      # testda xato qilingan gaplar (JSON ro'yxat)
+except sqlite3.OperationalError:
+    pass
 db.commit()
 
 
@@ -602,6 +606,19 @@ def get_notes(uid):
     return r[0] if r else ""
 
 
+def get_notes_ctx(uid):
+    """Suhbat uchun xotira: umumiy eslatmalar + oxirgi darsdagi testda xato qilgan gaplari (Rumiyo ularni nomi bilan eslatadi)."""
+    out = get_notes(uid)
+    try:
+        rows = db.execute("SELECT w FROM lres WHERE u=? AND w IS NOT NULL ORDER BY id DESC LIMIT 2", (uid,)).fetchall()
+        weak = list(dict.fromkeys(x for (w,) in rows for x in json.loads(w)))[:5]
+    except Exception:
+        weak = []
+    if weak:
+        out += ("\n" if out else "") + "Oxirgi test(lar)da shu gaplarda adashgan (ularni nomi bilan eslat, dars ichida yana qaytarishingni ayt): " + "; ".join(weak)
+    return out
+
+
 async def update_notes(uid, hist):
     """Suhbat oxirida: o'quvchi haqida qisqa eslatmalar (ism, qiziqish, odatiy xato) -> keyingi kunlarga xotira."""
     users = [m["content"] for m in hist if m["role"] == "user"]
@@ -665,7 +682,7 @@ THIS SESSION IS ONLY THE SHORT OPENING BEFORE TODAY'S LESSON (it OVERRIDES every
 STRICT STYLE: every turn is ONE or TWO short sentences, never more, in YOUR character and temper described above. Mostly Uzbek, a few easy Russian words. Never lecture, never list, never teach the lesson now.
 BE SMART AND FUNNY: use what you remember about the learner (the NOTES above: their name, job, hobbies, earlier mistakes and things they told you) naturally in the greeting, and add one short joke or playful tease built from the learner's own words or from the jokes listed above. Remember everything the learner says in this chat and refer back to it.
 FLOW (about one minute, 3-4 exchanges):
-1) Greet by name if the NOTES know it. If the NOTES do NOT contain their name, ask "Isming nima? Sanga qanday murojaat qilay?" first. Then ask ONE easy question: how are you / how is your study going. Then STOP and listen.
+1) Greet by name if the NOTES know it. If the NOTES do NOT contain their name, ask "Isming nima? Sanga qanday murojaat qilay?" first. Then, if the NOTES mention something the learner told you about their life (an exam, interview, trip, a sick relative, a plan, a hobby event), ask how THAT went, naming it specifically ("O'tgan safar imtihon bor edi, qanday o'tdi?"); if the NOTES list sentences they got wrong in the last test, once mention ONE of them by name and say you will bring it back inside the lesson. Otherwise ask ONE easy question: how are you / how is your study going. Then STOP and listen.
 2) React to the answer in one short human sentence (encourage, joke gently, or if they did not understand something, explain it very simply in Uzbek). Ask ONE more question: what they liked, did not like or found hard in the previous lessons ("Oldingi darslarda nima yoqmadi yoki qiyin bo'ldi? Ayt, tuzataman"). Listen to the answer, show you understood in one sentence and promise to make it easier. Then STOP and listen.
 3) Then announce in one or two sentences: the level and lesson number (from the FACTS below), today's topic, that a short test follows the lesson and the pass mark, and that you will talk again after the test. End with: "Endi darsga o'tamiz, pastdagi tugmani bos. Omad!"
 4) Immediately after saying that, call the function show_lesson_button. Do NOT mention a button before you call it and never say the button is missing. After calling it, say nothing more; wait silently.
@@ -721,7 +738,7 @@ def build_friendly(info, ses, dinfo, left, wrap, live=False):
     items = (dinfo or {}).get("i") or []
     sents = "\n".join(f"- {x[1]} = {x[2]}" for x in items[:15])
     uid = int(info["u"])
-    notes = get_notes(uid)
+    notes = get_notes_ctx(uid)
     quiz = ses.get("quiz")
     nxt = None
     if items:
@@ -792,7 +809,7 @@ def build_system(info, ses, dinfo, examples, left, wrap, live=False):
     sents = "\n".join(f"- {x[1]} = {x[2]}" for x in items[:15])
     ex = "\n".join(f'- Person: "{q}"  ->  Rumiyo: "{a}"' for q, a in examples)
     uid = int(info["u"])
-    notes = get_notes(uid)
+    notes = get_notes_ctx(uid)
     rules = [r for r in G.special("#qoida")][-30:]
     nicks = G.special("#laqab")
     scolds = G.special("#jahl")
@@ -1615,6 +1632,7 @@ async def lesson_result(request):
         info = verify(body.get("token"))
         r = json.loads(body.get("r") or "{}")
         lid, sc, n = int(r["l"]), int(r["s"]), int(r["n"])
+        w = [re.sub(r"\s+", " ", str(x)).strip()[:80] for x in (r.get("w") or [])[:3] if str(x).strip()]
     except Exception:
         return web.json_response({"ok": False, "error": "bad"}, status=400)
     if not info or int(info.get("i") or 0) != lid or n < 1 or not 0 <= sc <= n:
@@ -1622,7 +1640,7 @@ async def lesson_result(request):
     uid = int(info["u"])
     dup = db.execute("SELECT 1 FROM lres WHERE u=? AND lid=? AND s=? AND n=? AND ts>?", (uid, lid, sc, n, int(time.time()) - 600)).fetchone()
     if not dup:
-        db.execute("INSERT INTO lres(u, lid, s, n, ts) VALUES(?,?,?,?,?)", (uid, lid, sc, n, int(time.time())))
+        db.execute("INSERT INTO lres(u, lid, s, n, ts, w) VALUES(?,?,?,?,?,?)", (uid, lid, sc, n, int(time.time()), json.dumps(w, ensure_ascii=False) if w else None))
         db.commit()
     new = dict(info)
     new.pop("h", None)
@@ -1679,8 +1697,13 @@ async def admin_results(request):
         after = int(request.query.get("after", "0"))
     except ValueError:
         after = 0
-    rows = db.execute("SELECT id, u, lid, s, n FROM lres WHERE id>? ORDER BY id LIMIT 50", (after,)).fetchall()
-    return web.json_response({"results": [{"id": a, "u": b, "l": c, "s": d, "n": e} for a, b, c, d, e in rows]})
+    rows = db.execute("SELECT id, u, lid, s, n, w FROM lres WHERE id>? ORDER BY id LIMIT 50", (after,)).fetchall()
+    def _w(x):
+        try:
+            return json.loads(x) if x else []
+        except ValueError:
+            return []
+    return web.json_response({"results": [{"id": a, "u": b, "l": c, "s": d, "n": e, "w": _w(f)} for a, b, c, d, e, f in rows]})
 
 
 # ---------- endpoints ----------
@@ -1935,19 +1958,21 @@ async def voice_say(ctx, persona):
     name = str(ctx.get("name") or "").strip()[:40]
     idle = int(ctx.get("idle_hours") or 0)
     days = max(1, round(idle / 24)) if idle >= 12 else 0
+    weekly = ctx.get("kind") == "weekly"
     lines = ["Sen Rumiyosan: o'zbek tilida so'zlashuvchilarga rus/ingliz tilini o'rgatadigan jonli sun'iy intellekt ustoza.",
-             "Hozir shu o'quvchiga Telegram'da QISQA OVOZLI XABAR yuboryapsan: u darsga kirmayapti, uni darsga qaytar.",
+             ("Hozir shu o'quvchiga Telegram'da QISQA OVOZLI HAFTALIK HISOBOT yuboryapsan: bu hafta qancha o'rgangani, maqta va keyingi hafta uchun ruhlantir, hafta sinoviga (pastdagi tugma) taklif qil."
+              if weekly else "Hozir shu o'quvchiga Telegram'da QISQA OVOZLI XABAR yuboryapsan: u darsga kirmayapti, uni darsga qaytar."),
              "Ohang: " + VOICE_TONE.get(persona, VOICE_TONE["friendly"]) + ".",
              "Faqat gapirib aytiladigan matnni yoz: 1-3 qisqa gap, jami 40 so'zdan oshmasin, sof o'zbekcha, emoji, belgi, qo'shtirnoq, ro'yxat yo'q.",
-             "Har safar BOSHQACHA ayt: oldingi gaplarni takrorlama, jonli odamdek, hazil yoki mehr bilan. Oxirida bugun darsga kirishga chaqir.",
+             "Har safar BOSHQACHA ayt: oldingi gaplarni takrorlama, jonli odamdek, hazil yoki mehr bilan. " + ("" if weekly else "Oxirida bugun darsga kirishga chaqir."),
              "Faktlar: " + ("ismi " + name + "; " if name else "") +
-             (f"darsga {days} kundan beri kirmagan; " if days else "bugungi dars tayyor; ") +
+             ("bu hafta %s ta dars tugatgan; " % ctx.get("week_done", 0) if weekly else (f"darsga {days} kundan beri kirmagan; " if days else "bugungi dars tayyor; ")) +
              ("hozirgacha %s ta dars tugatgan; " % ctx["done"] if ctx.get("done") is not None else "") +
              ("darajasi %s; " % ctx["level"] if ctx.get("level") else "") +
              ("maqsadi: %s; " % ctx["goal"] if ctx.get("goal") else "") +
              ("o'rganayotgan tili: %s; " % ctx["lang"] if ctx.get("lang") else "") +
              "Faktni to'qima, bilmaganingni aytma. Ismini aytganda bir martagina ayt."]
-    notes = get_notes(int(ctx["uid"])) if str(ctx.get("uid") or "").isdigit() else ""
+    notes = get_notes_ctx(int(ctx["uid"])) if str(ctx.get("uid") or "").isdigit() else ""
     if notes:
         lines.append("U haqida eslab qolganlaring (kerak bo'lsa tabiiy ishlat, sanab o'tirma): " + notes[:600])
     msgs = [{"role": "system", "content": "\n".join(lines)}, {"role": "user", "content": "Ovozli xabar matnini yoz."}]
