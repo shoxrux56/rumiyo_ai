@@ -8,7 +8,7 @@ Hazil/pichinglar bazasi (gaplar_db.py) botdagi adminning "AI ni o'qitish" tugmas
 Kalitlar FAQAT muhit o'zgaruvchilarida (Render -> Environment), kodga yoki GitHubga yozilmaydi:
   TALK_SECRET (botdagi bilan bir xil), GROQ_API_KEYS (vergul bilan), OPENROUTER_API_KEY, GEMINI_API_KEY
 """
-import asyncio, io, wave, base64, difflib, hashlib, hmac, json, os, random, re, secrets, sqlite3, time
+import asyncio, io, zipfile, wave, base64, difflib, hashlib, hmac, json, os, random, re, secrets, sqlite3, time
 from datetime import datetime, timedelta, timezone
 
 import urllib.parse
@@ -1847,6 +1847,20 @@ async def placement_result(request):
     return web.json_response({"ok": True, "token": sign_token(new), "level": level})
 
 
+async def admin_clips_zip(request):
+    """Yaratilgan tayyor salom yozuvlari (clips/) bitta zip: GitHub'ga bir marta yuklab qo'yish uchun (Render qayta ishga tushsa o'chib ketmasin)."""
+    if not is_admin(request):
+        return denied()
+    buf = io.BytesIO()
+    n = 0
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        if os.path.isdir(CLIP_DIR):
+            for f in sorted(os.listdir(CLIP_DIR)):
+                if f.endswith((".wav", ".mp3", ".json")):
+                    z.write(os.path.join(CLIP_DIR, f), f); n += 1
+    return web.Response(body=buf.getvalue(), content_type="application/zip", headers={"X-Count": str(n)})
+
+
 async def admin_placements(request):
     if not is_admin(request):
         return denied()
@@ -2297,6 +2311,7 @@ def add_routes(app, prefix=""):
     app.router.add_get(p + "/admin/results", admin_results)
     app.router.add_post(p + "/placement/result", placement_result)
     app.router.add_get(p + "/admin/placements", admin_placements)
+    app.router.add_get(p + "/admin/clips.zip", admin_clips_zip)
     app.router.add_get(p + "/ai/live", ai_live)
     app.router.add_post(p + "/ai/turn", ai_turn)
     app.router.add_post(p + "/ai/end", ai_end)
