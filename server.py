@@ -1727,6 +1727,12 @@ async def placement_result(request):
     new = dict(info)
     new["h"], new["l"], new["e"] = 4, level, int(time.time()) + 86400
     new.pop("tx", None)
+    ent = (new.pop("fl", None) or {}).get(level)            # bot yuborgan: shu darajaning birinchi darsi [id, manzil]
+    if int(info.get("v") or 0) == 1 and isinstance(ent, list) and len(ent) == 2 and str(ent[1]).startswith("https://"):
+        new["i"], new["x"], new["k"] = int(ent[0]), str(ent[1]), 1
+        md = re.search(r"[?&]d=(\d+)", new["x"])
+        new["d"] = int(md.group(1)) if md else 0
+        new["p"] = int(info.get("p") or 70)
     return web.json_response({"ok": True, "token": sign_token(new), "level": level})
 
 
