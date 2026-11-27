@@ -643,7 +643,7 @@ var RumiyoAvatar = (function () {
     }
     $("cap-t").textContent = ""; if (ai) $("cap-t").appendChild(ai.cloneNode(true));
     $("cap").hidden = !stageOn() || !ai;
-    $("capme").hidden = !stageOn() || !me; if (me) $("capme").textContent = "🎤 " + me.textContent;
+    $("capme").hidden = !stageOn() || !me; if (me) $("capme").textContent = "🎤 Gapingiz eshitildi";   // yozuvni ko'rsatmaymiz: tanish tizimi o'zbekchani turkcha/boshqa tilda yozib yuboradi, Rumiyo esa ovozni o'zi tushunadi
   }
   try { new MutationObserver(syncCap).observe($("log"), { childList: true, subtree: true, characterData: true }); } catch (e) {}
   // gap mazmuniga qarab ustoz harakati: salom/xayr -> qo'l silkitadi, savol -> boshini egadi, maqtov -> bosh irg'aydi, "voy" -> hayratlanadi
