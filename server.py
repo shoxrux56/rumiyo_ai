@@ -469,6 +469,24 @@ def opener_for(persona, again, ses=None):
             else f"(o'quvchi endigina qo'ng'iroqni ochdi: {st} ohangda salom ber, bugungi mavzuga ulab." + ask + " Keyin bugun nechta gap yodlaganini so'ra)")
 
 
+def first_hook(uid, persona):
+    """Birinchi gapni "voy" qiladigan qoida: ism + bitta aniq narsani eslash (kun raqami, xato qilgan gap, xotira)."""
+    facts = []
+    try:
+        n = db.execute("SELECT COUNT(*) FROM sess WHERE user_id=?", (uid,)).fetchone()[0]
+        if n > 1:
+            facts.append("bu o'quvchi bilan %d-kun gaplashishingiz" % n)
+        weak = sorted(weak_set(uid))[:1]
+        if weak:
+            facts.append("oxirgi testda «%s» gapida adashgani" % weak[0])
+    except Exception:
+        pass
+    extra = (" Mana esdagi aniq narsalar: " + "; ".join(facts) + ".") if facts else ""
+    return (" BIRINCHI GAP QOIDASI: u juda qisqa bo'lsin (14 so'zdan oshmasin). O'quvchini ismi bilan chaqir (ismi NOTES da bo'lsa; bo'lmasa laqabi bilan) "
+            "va bitta aniq narsani esla: NOTES dagi biror gap yoki quyidagi faktlardan biri." + extra +
+            " «Qanday yordam beray» kabi umumiy gap gapirma.")
+
+
 def get_session(info):
     t = time.time()
     for k in [k for k, v in SES.items() if t - v["ts"] > 3 * 3600]:
@@ -1359,7 +1377,7 @@ async def ensure_clips(char, sex):
     """Ehtirosli/shirin ustoz uchun tayyor salomlashuvlarni (Gemini TTS) bir marta yaratadi. Birinchi kirgan odam odatdagidek eshitadi,
     keyingilar tayyor yozuvni darrov eshitadi."""
     key = "%s.%s" % (char, sex)
-    if char not in ("fiery", "sweet") or sex not in ("m", "f") or key in CLIP_GEN:
+    if char not in PERSONAS or sex not in ("m", "f") or key in CLIP_GEN:
         return
     try:
         data = json.load(open(os.path.join(HERE, "clips_phrases.json"), encoding="utf-8"))
@@ -1413,6 +1431,19 @@ async def ensure_clips(char, sex):
         CLIP_GEN.discard(key)
 
 
+async def clips_warm_loop():
+    """Render qayta ishga tushganda tayyor salomlar o'chadi: kalitlar kelgach hamma ustozlar uchun fonda qayta yaratadi (birinchi odam ham darhol eshitadi)."""
+    await asyncio.sleep(60)
+    while True:
+        try:
+            if keys("gemini"):
+                for ch in PERSONAS:
+                    await ensure_clips(ch, "f")
+        except Exception as e:
+            print("clip warm:", repr(e)[:120])
+        await asyncio.sleep(300)
+
+
 async def clips_manifest_view(request):
     return web.json_response(clip_manifest(), headers={"Cache-Control": "no-store"})
 
@@ -1447,7 +1478,7 @@ async def ai_live(request):
     ses = get_session(info)
     persona = set_persona(info, ses, request.query.get("p"), request.query.get("g"))
     load_gender(info, ses, request.query.get("g"))
-    if persona in ("fiery", "sweet") and ses.get("sex") in ("m", "f"):
+    if persona in PERSONAS and ses.get("sex") in ("m", "f"):
         asyncio.ensure_future(ensure_clips(persona, ses["sex"]))      # fonda: tayyor salomlashuv yozuvlari yo'q bo'lsa yaratadi
     dinfo = await day_info(info.get("d"), lg(info))
     humor = humor_level()
@@ -1469,8 +1500,8 @@ async def ai_live(request):
                    % (info.get("l") or "A1", info.get("k") or "", info.get("l") or "A1", info.get("k") or "", info.get("p") or 70))
     np_clip = request.query.get("np") == "1"          # salomlashuv tayyor ovoz yozuvi bilan allaqachon aytilgan
     if np_clip:
-        sysmsg += ("\n\nIMPORTANT: the opening greeting was ALREADY played to the learner as a short pre-recorded whisper (a warm hello and an invitation to begin). "
-                   "Do NOT greet again and do not speak first: stay silent and wait; when the learner speaks, answer them directly, continuing naturally from that greeting.")
+        sysmsg += ("\n\nIMPORTANT: a short pre-recorded greeting (a warm hello) is ALREADY playing to the learner right now. "
+                   "Do NOT say hello again and do not introduce yourself again; go straight to your first short sentence as instructed in the opening note.")
     t0 = time.time()
     turns = []        # [("u"|"a", matn)]
     if LIVE_MAX and LIVE_ACTIVE["all"] >= LIVE_MAX:
@@ -1498,11 +1529,14 @@ async def ai_live(request):
         elif intro:
             opener = ("(o'quvchi bugungi dars oldidan kirdi: iliq salom ber, ismi bilan murojaat qil, 1 daqiqa qisqa suhbatlash, "
                       "so'ng darajasi va dars raqamini ayt va darsni boshlashni taklif qil. Jinsini yoki yodlagan gaplarini so'rama)")
+        if mode in (0, 1, 2):
+            opener = opener[:-1] + first_hook(uid, persona) + ")" if opener.endswith(")") else opener + first_hook(uid, persona)
+        if np_clip:
+            opener = "(Qisqa tayyor salom yozuvi allaqachon chalinyapti: QAYTA SALOM BERMA va qayta tanishtirma. Faqat quyidagi vazifaning salomdan keyingi qismini bajar. " + opener[1:] if opener.startswith("(") else opener
         if talked_today and mode != 5:
             opener = ("(o'quvchi bugun Rumiyo bilan allaqachon gaplashgan edi va hozir qaytib kirdi. QAYTA SALOM BERMA, o'zingni qayta tanishtirma, ismini ham takrorlama. "
                       "Faqat 'Davom etamiz' ma'nosida bitta qisqa gap ayt va suhbat/dars/tugmaga o'tib ket. Oldingi vazifa: %s)" % opener[1:-1])
-        if not np_clip:
-            await up.send_str(json.dumps({"realtimeInput": {"text": opener}}))
+        await up.send_str(json.dumps({"realtimeInput": {"text": opener}}))
         await j({"t": "ready", "left": left0, "ptt": LIVE_PTT, "g": ses.get("g") or ""})
         tagbuf = {}
         state = {"wrap": False, "nudge": False, "btn": False, "cur_in": "", "cur_out": "", "talking": False, "talk_t0": 0.0, "user_s": 0.0, "ai_s": 0.0, "last": time.time()}
@@ -1536,8 +1570,8 @@ async def ai_live(request):
                         continue
                     if o.get("t") == "end":
                         return
-                    if o.get("t") == "opener" and np_clip:      # tayyor yozuv yuklanmadi: ustoz o'zi salom beradi
-                        await up.send_str(json.dumps({"realtimeInput": {"text": opener}}))
+                    if o.get("t") == "opener" and np_clip:      # tayyor yozuv yuklanmadi: ustoz o'zi qisqa salom beradi
+                        await up.send_str(json.dumps({"realtimeInput": {"text": "(tayyor salom yozuvi eshitilmadi: o'zing bitta juda qisqa salom ber va davom et)"}}))
                     if o.get("t") == "ptt" and LIVE_PTT:
                         state["last"] = time.time()
                         if o.get("on") and not state["talking"]:
@@ -2250,6 +2284,7 @@ def make_app():
 async def main():
     runner = web.AppRunner(make_app())
     await runner.setup()
+    asyncio.ensure_future(clips_warm_loop())
     await web.TCPSite(runner, "0.0.0.0", PORT).start()
     print(f"Rumiyo sayti ishlayapti: port {PORT}, juftliklar: {G.count()}")
     await asyncio.Event().wait()

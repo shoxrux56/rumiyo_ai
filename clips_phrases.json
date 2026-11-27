@@ -2,7 +2,9 @@
   "_izoh": "Bu faylga o'zingiz xohlagan gaplarni qo'shing, so'ng tools/make_clips.py ni ishga tushiring: faqat yangi gaplar ovozga aylanadi. Harflarni cho'zing (s-e-e-ni), ko'p nuqta (...) qo'ying: bu nafas va pauza beradi.",
   "styles": {
     "fiery": "O'ta mayin, nafas aralash, pastroq ovozda, xuddi quloqqa yaqin kelib sirlarni aytayotgandek, juda sekin va jozibali pichirlab o'qi: ",
-    "sweet": "Shirin, erkalagan, asalday yumshoq va mehribon ovozda, biroz sekin va jilmayib o'qi: "
+    "sweet": "Shirin, erkalagan, asalday yumshoq va mehribon ovozda, biroz sekin va jilmayib o'qi: ",
+    "friendly": "Iliq, quvnoq va tabassum bilan, tabiiy va tez tezlikda, do'stiga gapirgandek o'qi: ",
+    "angry": "Jahl bilan, baland va keskin, lekin juda kulgili, hazil aralash o'qi: "
   },
   "openers": {
     "fiery": [
@@ -18,6 +20,16 @@
       "Assalomu alaykum, novvotim... bugun kayfiyating qanday?... Men senga hammasini yengil tushuntiraman...",
       "Salom, erkatoyim! Yana yonimdasan... qanday yaxshi!... Boshlaymizmi, do'mboqcham?",
       "Salom, quyoncham! Bugun ham birga... o'rganamiz... xavotir olma, men yoningdaman, mushukcham!"
+    ],
+    "friendly": [
+      "Assalomu alaykum! Men Rumiyoman. Tayyormisan? Bugun zo'r dars qilamiz!",
+      "Voy, keldingmi! Juda yaxshi, jonim! Hozir boshlaymiz!",
+      "Salom, salom! Seni kutib o'tirgan edim, boshladik!"
+    ],
+    "angry": [
+      "Hoy! Nihoyat keldingmi?! Tez o'tir, ishni boshlaymiz!",
+      "Yana sen?! Mayli, o'tir, gapirishni boshla, vaqt yo'q!",
+      "Salom! Bugun gap yodlamay kelgan bo'lsang, jahlim chiqadi, bil!"
     ]
   }
 }

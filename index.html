@@ -822,7 +822,7 @@ var RumiyoAvatar = (function () {
   try { fetch("clips/manifest.json?x=" + Date.now()).then(function (r) { return r.ok ? r.json() : null; }).then(function (m) { CLIPS = m; }).catch(function () {}); } catch (e) {}
   function pickClip() {
     try {
-      if (!CLIPS || !P || (P.c !== "fiery" && P.c !== "sweet")) return null;
+      if (!CLIPS || !P) return null;
       var arr = CLIPS[P.c + "." + (AV[P.a] && AV[P.a].s === "m" ? "m" : "f")];
       return arr && arr.length ? arr[Math.floor(Math.random() * arr.length)] : null;
     } catch (e) { return null; }
@@ -901,9 +901,12 @@ var RumiyoAvatar = (function () {
     if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) || !window.MediaRecorder) {
       return noMic("Mikrofon bu yerda ishlamaydi", "Mikrofon ochilmadi. Qurilma sozlamasidan mikrofonga ruxsat bering.");
     }
+    // ruxsat so'ralayotgan paytda server so'rovi ham ketadi: kutish qisqaradi
+    var startP = post("ai/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token, live: true, persona: persona, g: gender }) });
+    startP.catch(function () {});
     navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(function (s) {
       mic = s; $("log").innerHTML = ""; show("s-chat"); setAv("idle"); state("Rumiyo o'ylayapti…"); $("b-mic").disabled = true;
-      post("ai/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token, live: true, persona: persona, g: gender }) }).then(function (j) {
+      startP.then(function (j) {
         if (j.done && !(j.ru || j.uz)) return finish(j);
         if (j.error) { state(j.error); return; }
         if (j.bot) botUrl = j.bot;
