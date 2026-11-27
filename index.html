@@ -434,7 +434,7 @@ var RumiyoAvatar = (function () {
       .then(function (x) { return x.json(); })
       .then(function (j) {
         if (j && j.ok && j.token) { token = j.token; parseTI(); try { history.replaceState(null, "", location.pathname + "?t=" + encodeURIComponent(token) + location.hash); } catch (e) {}
-          if (TI.h === 6) { var tp = document.getElementById("h-topic"); if (tp) tp.textContent = EN ? "Test done! Now we say today's sentences aloud and I fix your pronunciation. Allow the microphone." : "Test tugadi! Endi bugungi gaplarni ovoz chiqarib aytamiz, men talaffuzingni tuzataman. Mikrofonga ruxsat bering."; } }
+          if (TI.h === 6) { var tp = document.getElementById("h-topic"); if (tp) tp.textContent = EN ? "Lesson done! Now we say today's sentences aloud and I fix your pronunciation. Allow the microphone." : "Dars tugadi! Endi bugungi gaplarni ovoz chiqarib aytamiz, men talaffuzingni tuzataman. Mikrofonga ruxsat bering."; } }
       }).catch(function () {});
   })();
   // trenerdan "Rumiyo bilan gaplashish" (talk=kun): talaffuz suhbati uchun h=6 havola olinadi
