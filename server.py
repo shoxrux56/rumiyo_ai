@@ -97,9 +97,9 @@ def today():
 # ---------- sozlamalar (bot / sahifadan keladi) ----------
 def daily_secs():
     try:
-        return max(30, int(float(os.getenv("DAILY_MIN") or G.setting("dailyMin", 5)) * 60))
+        return max(600, int(float(os.getenv("DAILY_MIN") or G.setting("dailyMin", 10)) * 60))      # kuniga kamida 10 daqiqa
     except (TypeError, ValueError):
-        return 300
+        return 600
 
 
 def humor_level():
@@ -1421,10 +1421,11 @@ async def ai_live(request):
         await j({"t": "error", "error": "Ovozli suhbat VIP uchun. Botda 💎 VIP ga o'ting."}); await ws.close(); return ws
     uid = int(info["u"])
     left0 = left_for(uid)
+    talked_today = left0 < daily_secs()               # bugun allaqachon gaplashgan: qayta salom bermaymiz
     if int(info.get("h") or 0) == 5:
         left0 = max(left0, WEEK_MAX_S + 30)      # haftalik og'zaki sinov (10 daqiqa) kunlik limitga bog'liq emas
     elif info.get("h"):
-        left0 = max(left0, 240)          # dars oldi suhbati kunlik limitga bog'liq emas
+        left0 = max(left0, 120)          # dars oldi suhbati: umumiy 10 daqiqalik hisobdan ketadi, lekin kamida 2 daqiqa beriladi
     if left0 <= 0:
         await j({"t": "done", "cta": cta_text(), "bot": BOT_URL}); await ws.close(); return ws
     if not (LIVE_ON and keys("gemini")):
@@ -1483,6 +1484,9 @@ async def ai_live(request):
         elif intro:
             opener = ("(o'quvchi bugungi dars oldidan kirdi: iliq salom ber, ismi bilan murojaat qil, 1 daqiqa qisqa suhbatlash, "
                       "so'ng darajasi va dars raqamini ayt va darsni boshlashni taklif qil. Jinsini yoki yodlagan gaplarini so'rama)")
+        if talked_today and mode != 5:
+            opener = ("(o'quvchi bugun Rumiyo bilan allaqachon gaplashgan edi va hozir qaytib kirdi. QAYTA SALOM BERMA, o'zingni qayta tanishtirma, ismini ham takrorlama. "
+                      "Faqat 'Davom etamiz' ma'nosida bitta qisqa gap ayt va suhbat/dars/tugmaga o'tib ket. Oldingi vazifa: %s)" % opener[1:-1])
         if not np_clip:
             await up.send_str(json.dumps({"realtimeInput": {"text": opener}}))
         await j({"t": "ready", "left": left0, "ptt": LIVE_PTT, "g": ses.get("g") or ""})
@@ -1657,8 +1661,8 @@ async def ai_live(request):
                 await up.close()
             except Exception:
                 pass
-    if not intro and mode != 5:
-        add_use(uid, max(1, elapsed))
+    if mode != 5:
+        add_use(uid, max(1, elapsed))      # kirish va test suhbati ham umumiy 10 daqiqalik hisobdan ketadi
     for who, txt in turns:
         ses["hist"].append({"role": "user" if who == "u" else "assistant", "content": txt if who == "u" else f"UZ: {txt}\nRU: "})
     ses["hist"] = ses["hist"][-mem_msgs():]
