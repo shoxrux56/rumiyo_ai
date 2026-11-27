@@ -1882,23 +1882,26 @@ async def lesson_talk(request):
 
 
 GRAM_URL = os.getenv("TRENER_GRAM", "https://shoxrux56.github.io/trener/gramatika.js")
-_gram = {"ts": 0.0, "arr": []}
+GRAM_URL_EN = os.getenv("TRENER_GRAM_EN", "https://shoxrux56.github.io/trening_ingilish/gramatika.js")
+_gram = {"ru": {"ts": 0.0, "arr": []}, "en": {"ts": 0.0, "arr": []}}
 
 
 async def gtest_facts(info):
     """Og'zaki grammatika testi: trenerdagi gramatika.js dan shu mavzuning savollari (ko'pi bilan 8 ta)."""
-    if time.time() - _gram["ts"] > 3600 or not _gram["arr"]:
+    lk = "en" if lg(info) == "en" else "ru"
+    gc = _gram[lk]
+    if time.time() - gc["ts"] > 3600 or not gc["arr"]:
         try:
             async with aiohttp.ClientSession() as http:
-                async with http.get(GRAM_URL, timeout=aiohttp.ClientTimeout(total=20)) as r:
+                async with http.get(GRAM_URL_EN if lk == "en" else GRAM_URL, timeout=aiohttp.ClientTimeout(total=20)) as r:
                     s = await r.text()
-            _gram["arr"] = json.loads(s[s.index("["): s.rindex("]") + 1])
-            _gram["ts"] = time.time()
+            gc["arr"] = json.loads(s[s.index("["): s.rindex("]") + 1])
+            gc["ts"] = time.time()
         except Exception as e:
             print("gramatika.js:", type(e).__name__)
-            _gram["ts"] = time.time() - 3300
+            gc["ts"] = time.time() - 3300
     try:
-        t = _gram["arr"][int(info.get("gi"))]
+        t = gc["arr"][int(info.get("gi"))]
     except Exception:
         return "\n- FACTS: no questions are available; ask the learner five short grammar questions about the Russian gender words (мой/моя/моё) and judge them."
     qs = []
@@ -1908,7 +1911,7 @@ async def gtest_facts(info):
             random.shuffle(opts)
             qs.append("QUESTION: %s | options: %s | CORRECT: %s" % (q[1], " / ".join(opts), q[2]))
         elif q[0] == "build" or len(q) >= 3:
-            qs.append("QUESTION: translate to Russian (aloud): %s | CORRECT: %s" % (q[1], q[2]))
+            qs.append("QUESTION: translate to %s (aloud): %s | CORRECT: %s" % ("English" if lk == "en" else "Russian", q[1], q[2]))
     random.shuffle(qs)
     qs = qs[:8]
     return ("\n- FACTS: grammar topic: %s (%s). Ask exactly these %d questions in this order:\n" % (t.get("t"), t.get("lv"), len(qs))
