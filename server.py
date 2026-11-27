@@ -715,6 +715,20 @@ ABOUT THE SYSTEM (all true; proudly tell the learner about it in your own words,
 
 NONLAT_RE = re.compile(r"[^\u0000-\u024F\u02B0-\u02FF\u0300-\u036F\u0400-\u04FF\u2000-\u206F\u2190-\u21FF\U0001F000-\U0001FAFF\u2600-\u27BF]")
 TAGS_RE = re.compile(r"<[A-Za-z/][^>]{0,40}>|\{[^}]{0,40}\}")
+OPEN_TAG_RE = re.compile(r"(<[A-Za-z/]?[^>]{0,40}|\{[^}]{0,40})$")
+
+
+def strip_tags(pend, key, text):
+    """Matn bo'lak-bo'lak keladi ("<no" + " speech>"): ochilgan-yopilmagan belgini keyingi bo'lakkacha ushlab turamiz, to'liq belgilarni o'chiramiz."""
+    t = pend.get(key, "") + (text or "")
+    t = TAGS_RE.sub("", t)
+    m = OPEN_TAG_RE.search(t)
+    if m:
+        pend[key] = m.group(1)
+        t = t[:m.start()]
+    else:
+        pend[key] = ""
+    return t
 
 PLACE_RULES = """
 
@@ -1490,6 +1504,7 @@ async def ai_live(request):
         if not np_clip:
             await up.send_str(json.dumps({"realtimeInput": {"text": opener}}))
         await j({"t": "ready", "left": left0, "ptt": LIVE_PTT, "g": ses.get("g") or ""})
+        tagbuf = {}
         state = {"wrap": False, "nudge": False, "btn": False, "cur_in": "", "cur_out": "", "talking": False, "talk_t0": 0.0, "user_s": 0.0, "ai_s": 0.0, "last": time.time()}
 
         def used_secs():
@@ -1581,7 +1596,7 @@ async def ai_live(request):
                         state["ai_s"] += len(pcm) / 48000.0        # 24 kHz, 16 bit, mono
                         state["last"] = time.time()
                         await ws.send_bytes(pcm)
-                it = TAGS_RE.sub("", (sc.get("inputTranscription") or {}).get("text") or "")   # <noise>, {pause} kabi xom belgilar matnga tushmasin
+                it = strip_tags(tagbuf, "in", (sc.get("inputTranscription") or {}).get("text"))   # <noise>, {pause}, <no speech> kabi xom belgilar (bo'lak-bo'lak kelsa ham) matnga tushmasin
                 if NONLAT_RE.search(it):
                     it = ""          # tanish tizimi o'zbekchani hind/arab yozuvida "eshitsa", ekranga va tarixga chiqarmaymiz (Rumiyo ovozni o'zi tushunadi)
                 if it.strip():
@@ -1598,7 +1613,7 @@ async def ai_live(request):
                         gg = learn_gender(info, ses, state["cur_in"])
                         if gg:
                             await j({"t": "gender", "g": gg})
-                ot = TAGS_RE.sub("", (sc.get("outputTranscription") or {}).get("text") or "")
+                ot = strip_tags(tagbuf, "out", (sc.get("outputTranscription") or {}).get("text"))
                 if ot.strip():
                     state["last_out"] = state.get("last_out", "") + ot
                     state["cur_out"] += ot
