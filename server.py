@@ -469,6 +469,24 @@ def opener_for(persona, again, ses=None):
             else f"(o'quvchi endigina qo'ng'iroqni ochdi: {st} ohangda salom ber, bugungi mavzuga ulab." + ask + " Keyin bugun nechta gap yodlaganini so'ra)")
 
 
+ENTRY_TAGS = {"friendly": "#kirish_dostona", "angry": "#kirish_jahldor", "fiery": "#kirish_ehtiros", "sweet": "#kirish_mehribon"}
+
+
+def entry_hint(persona):
+    """Egasi yozib qo'ygan «birinchi kirganda aytiladigan» gaplar: admin «AI ni o'qitish»da `#kirish` (hamma ustozga) yoki `#kirish_jahldor`,
+    `#kirish_mehribon`, `#kirish_dostona`, `#kirish_ehtiros` (faqat shu ustozga) deb yoziladi."""
+    try:
+        lines = G.special("#kirish") + G.special(ENTRY_TAGS.get(persona, "#kirish"))
+    except Exception:
+        lines = []
+    lines = list(dict.fromkeys(l.strip() for l in lines if l and l.strip()))
+    if not lines:
+        return ""
+    lines = random.sample(lines, min(4, len(lines)))
+    return (" EGASINING KIRISH GAPLARI (yaratuvchi aynan o'quvchi birinchi kirgan payt uchun yozgan, sening ovozingda): ulardan BITTASINI tanla, o'quvchining ismiga moslab, "
+            "o'z so'zlaring bilan, birinchi gaping qilib ayt (so'zma-so'z o'qima, hazil va ohangini saqla):\n" + "\n".join("- " + l[:200] for l in lines) + "\n")
+
+
 def first_hook(uid, persona):
     """Birinchi gapni "voy" qiladigan qoida: ism + bitta aniq narsani eslash (kun raqami, xato qilgan gap, xotira)."""
     facts = []
@@ -1535,6 +1553,10 @@ async def ai_live(request):
                       "so'ng darajasi va dars raqamini ayt va darsni boshlashni taklif qil. Jinsini yoki yodlagan gaplarini so'rama)")
         if mode in (0, 1, 2):
             opener = opener[:-1] + first_hook(uid, persona) + ")" if opener.endswith(")") else opener + first_hook(uid, persona)
+        if mode in (0, 1, 2, 3):
+            eh = entry_hint(persona)
+            if eh:
+                opener = opener[:-1] + eh + ")" if opener.endswith(")") else opener + eh
         if np_clip:
             opener = "(Qisqa tayyor salom yozuvi allaqachon chalinyapti: QAYTA SALOM BERMA va qayta tanishtirma. Faqat quyidagi vazifaning salomdan keyingi qismini bajar. " + opener[1:] if opener.startswith("(") else opener
         if talked_today and mode != 5:
