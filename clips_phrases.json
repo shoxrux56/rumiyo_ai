@@ -24,12 +24,22 @@
     "friendly": [
       "Assalomu alaykum! Men Rumiyoman. Tayyormisan? Bugun zo'r dars qilamiz!",
       "Voy, keldingmi! Juda yaxshi, jonim! Hozir boshlaymiz!",
-      "Salom, salom! Seni kutib o'tirgan edim, boshladik!"
+      "Salom, salom! Seni kutib o'tirgan edim, boshladik!",
+      "Voy, kim kelibdi! Seni kutib o'tirgandim, boshladikmi?",
+      "Salom, do'stim! Bugun ham zo'r gaplashamiz!",
+      "Qalaysan, polvon? Bugun ruscha gap otamiz!",
+      "Hormang! Tayyor bo'lsang, boshladik!",
+      "Oo, mehmon keldi! Qani, boshlaymiz!"
     ],
     "angry": [
       "Hoy! Nihoyat keldingmi?! Tez o'tir, ishni boshlaymiz!",
       "Yana sen?! Mayli, o'tir, gapirishni boshla, vaqt yo'q!",
-      "Salom! Bugun gap yodlamay kelgan bo'lsang, jahlim chiqadi, bil!"
+      "Salom! Bugun gap yodlamay kelgan bo'lsang, jahlim chiqadi, bil!",
+      "Ey, necha marta aytdim, o'z vaqtida kel deb! Qani, tezroq!",
+      "Hoy, o'tir! Bugun bitta xato qilsang ham eshitaman!",
+      "Voy bu bolani qarang, yana keldi! Ishla endi, ishla!",
+      "Bo'ldi, boshladik! Vaqt ketyapti!",
+      "Kelding-a? Mayli, bugun yaxshi gapirsang kechiraman!"
     ]
   }
 }

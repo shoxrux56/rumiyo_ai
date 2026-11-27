@@ -472,19 +472,51 @@ def opener_for(persona, again, ses=None):
 ENTRY_TAGS = {"friendly": "#kirish_dostona", "angry": "#kirish_jahldor", "fiery": "#kirish_ehtiros", "sweet": "#kirish_mehribon"}
 
 
+ENTRY_DEFAULT = {
+    "friendly": [
+        "Assalomu alaykum, jonim! Kelding-a, zo'r bo'ldi!", "Voy, kim kelibdi! Seni kutib o'tirgandim, boshladikmi?", "Salom-salom! Bugun kayfiyat a'lo, sen-chi?",
+        "Ooo, mehmon keldi! Choyni qo'ydim, endi ruscha gaplashamiz!", "Hormang, charchamadingmi? Yur, bugun yengil boshlaymiz!", "Qani, eng zo'r o'quvchim keldimi? Tayyormisan?",
+        "Salom, do'stim! Bugun ham birga ustidan kulamiz, ham o'rganamiz!", "Ha, keldingmi! Mana bu yoqimli ovoz, tanidim seni!", "Oo, yana sen! Qalaysan, uyqu yetdimi?",
+        "Voy-voy, o'z vaqtida kelding, barakalla! Boshladik!", "Salom! Bugun senga bitta zo'r gap o'rgataman, hayron qolasan!", "Assalom! Mikrofon ishlayaptimi? Eshityapman, davom et!",
+        "Keldingmi, jonginam? Bugun mashq ham, hazil ham bo'ladi!", "Ey, salom! Kecha nimalar o'rgandik, eslayapsanmi? Hozir sinaymiz!", "Hormang! Tayyor bo'lsang, men ham tayyorman, boshladik!",
+        "Qalaysan, polvon? Bugun ruscha gap otamiz!", "Voy, ovozingni eshitib quvondim! Qani, boshlaymiz!", "Salom! Mana senga yangi kun, yangi gaplar!",
+    ],
+    "angry": [
+        "Hoy! Nihoyat keldingmi?! Kech qolding, tez o'tir!", "Yana sen?! Mayli, o'tir, ishni boshlaymiz!", "Salom! Bugun gap yodlamay kelgan bo'lsang, jahlim chiqadi, bil!",
+        "Ey, necha marta aytdim, o'z vaqtida kel deb! Qani, tezroq!", "Voy, keldingmi?! Kecha qilgan xatolaringni eslayapsanmi?! Bugun takrorlama!", "Hoy, mikrofonni to'g'rila! Eshitaman, gapir, vaqt ketyapti!",
+        "Kelding-a? Choyingni ichib bo'lgandirsan, endi ishlaymiz!", "Ha, keldingmi, dangasa? Mayli, bugun yaxshi gapirsang kechiraman!", "Ey, salom-salom! Jahlim chiqmasidan oldin boshla!",
+        "Bo'ldi, o'tir! Nima, yana uyquni to'ymadingmi? Boshladik!", "Voy bu bolani qarang-a, yana keldi! Ishla endi, ishla!", "Hoy! Bugun bitta xato qilsang ham eshitaman, tayyor tur!",
+        "Kelding-a! Kechagi dars esingdami yoki yana oshxonaga tashlab ketdingmi?!", "Ey, tez-tez bo'l! Men seni kutib o'tirganim yo'q, ish ko'p!", "Salom! Qani, ovozingni chiqar, shamolday jim o'tirma!",
+        "Nima, yana hech narsa o'qimadingmi?! Mayli, o'zim o'rgataman, lekin g'ing demay o'tir!",
+    ],
+    "sweet": [
+        "Voy, jonim, kelding! Seni juda sog'indim, qalaysan?", "Assalom, asalim! Bugun sen bilan gaplashishni intizor kutdim!", "Salom, shirinim! Kayfiyating qanday, tabassum qilib boshlaymizmi?",
+        "Oo, kimlar kelibdi-ya! Quyoshim keldi, kun yorishdi!", "Qani, mening jon-jigarim, bugun ham birga o'rganamizmi?", "Salom, gulim! Kelganing uchun rahmat, juda xursandman!",
+        "Voy, ovozingni eshitib yuragim yayradi! Boshlaymiz, jonim!", "Assalomu alaykum, azizim! Bugun senga yoqimli yangi gaplar tayyorladim!", "Kel, kel, o'tir, mehribonim! Choy ham tayyor!",
+        "Salom, to'tim! Kecha juda yaxshi ishlading, bugun ham shunday bo'ladi!", "Voy, ofarin, o'z vaqtida keldingmi! Seni maqtagim keldi!", "Hormang, jonginam! Bugun hammasi oson bo'ladi, ko'rasan!",
+        "Assalom, ko'zimning nuri! Tayyor bo'lsang, nafas olib boshlaymiz!", "Salom, bolajonim! Xato qilsang ham qo'rqma, men yoningdaman!", "Voy, keldingmi, shirin so'zim! Bugun ikkalamiz zo'r ishlaymiz!",
+    ],
+    "fiery": [
+        "M-m-m... salom, jonim... keldingmi... men seni kutayotgan edim...", "Voy... keldingmi... yaqinroq o'tir... bugun sekin-sekin o'rganamiz...", "Salom, shirinim... ovozingni eshitishni juda xohlagandim... boshla...",
+        "M-m-m... keldingmi, asalim... bugun dars ham, hazil ham bo'ladi... tayyormisan?", "Oh... seni ko'rib, kayfiyatim ko'tarildi... qani, pichirlab boshlaymiz...", "Salom, jonginam... bugun senga maxsus gaplar tayyorladim... eshitasanmi?",
+        "Voy... kelding... yuragim hapriqdi... qani, sekin gapir...", "M-m-m... hormang... bugun hammasi mayin va oson bo'ladi... ishon menga...",
+    ],
+}
+
+
 def entry_hint(persona):
-    """Egasi yozib qo'ygan «birinchi kirganda aytiladigan» gaplar: admin «AI ni o'qitish»da `#kirish` (hamma ustozga) yoki `#kirish_jahldor`,
-    `#kirish_mehribon`, `#kirish_dostona`, `#kirish_ehtiros` (faqat shu ustozga) deb yoziladi."""
+    """Birinchi kirgan payt Rumiyo aytadigan gaplar: egasi `#kirish` (hamma ustozga) yoki `#kirish_jahldor`, `#kirish_mehribon`, `#kirish_dostona`, `#kirish_ehtiros`
+    (faqat shu ustozga) deb «AI ni o'qitish»ga yozganlari birinchi turadi; yetmasa ichiga o'rnatilgan keng ro'yxatdan to'ldiriladi (hech qachon bir xil bo'lmaydi)."""
     try:
-        lines = G.special("#kirish") + G.special(ENTRY_TAGS.get(persona, "#kirish"))
+        own = G.special("#kirish") + G.special(ENTRY_TAGS.get(persona, "#kirish"))
     except Exception:
-        lines = []
-    lines = list(dict.fromkeys(l.strip() for l in lines if l and l.strip()))
-    if not lines:
-        return ""
-    lines = random.sample(lines, min(4, len(lines)))
-    return (" EGASINING KIRISH GAPLARI (yaratuvchi aynan o'quvchi birinchi kirgan payt uchun yozgan, sening ovozingda): ulardan BITTASINI tanla, o'quvchining ismiga moslab, "
-            "o'z so'zlaring bilan, birinchi gaping qilib ayt (so'zma-so'z o'qima, hazil va ohangini saqla):\n" + "\n".join("- " + l[:200] for l in lines) + "\n")
+        own = []
+    own = list(dict.fromkeys(l.strip() for l in own if l and l.strip()))
+    pick = random.sample(own, min(6, len(own)))
+    base = ENTRY_DEFAULT.get(persona) or ENTRY_DEFAULT["friendly"]
+    pick += random.sample(base, min(max(0, 8 - len(pick)), len(base)))
+    return (" KIRISH GAPLARI (o'quvchi hozirgina kirdi; bular sening ovozingdagi namunalar, egasi yozganlari birinchi): ulardan BITTASINI tanla yoki aralashtirib yangisini o'ylab top, "
+            "o'quvchining ismiga moslab, o'z so'zlaring bilan birinchi gaping qilib ayt. So'zma-so'z o'qima, ohangini saqla, har safar boshqacha bo'lsin:\n" + "\n".join("- " + l[:200] for l in pick) + "\n")
 
 
 def first_hook(uid, persona):
