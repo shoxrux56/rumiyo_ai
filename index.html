@@ -778,6 +778,15 @@ var RumiyoAvatar = (function () {
     try { if (L.pctx.state === "suspended") { L.pctx.resume(); state("Ovoz chiqmasa, ekranga bir marta tegining"); } } catch (e) {}
     src.onended = function () { var k = L.srcs.indexOf(src); if (k >= 0) L.srcs.splice(k, 1); if (!L.srcs.length) { setAv("idle"); L.quiet = Date.now() + 450; if (!L.ptt && !L.muted) { micUI("on"); state("Sizning navbatingiz: gapiravering"); } } };
   }
+  // mikrofon "ustoz gapiryapti" holatida qolib ketmasin: ovoz tugagan bo'lsa (yoki tugagani eshitilmasa) o'zi ochiladi
+  function micWatch(L) {
+    try {
+      if (!L || L.closed || !L.pctx) return;
+      var now = L.pctx.currentTime;
+      if (L.srcs.length && L.next && now > L.next + 0.5) L.srcs = [];
+      if (!L.srcs.length && !L.ptt && !L.muted && ms.className === "wait") { setAv("idle"); L.quiet = Date.now() + 300; micUI("on"); state("Sizning navbatingiz: gapiravering"); }
+    } catch (e) {}
+  }
   function liveStopPlay(L) { L.srcs.forEach(function (x) { try { x.stop(); } catch (e) {} }); L.srcs = []; L.next = 0; setAv("idle"); }
   function liveCleanup() {
     var L = live; if (!L || L.closed) return; L.closed = true;
@@ -847,6 +856,7 @@ var RumiyoAvatar = (function () {
     ws.binaryType = "arraybuffer";
     var L = live = { ws: ws, ready: false, muted: false, talking: false, ptt: true, pre: [], next: 0, srcs: [], curMe: null, curAi: null, closed: false };
     state("Ulanyapman…"); $("b-mic").disabled = true;
+    L.wd = setInterval(function () { if (L.closed) clearInterval(L.wd); else micWatch(L); }, 600);
     try {
       L.pctx = window._pc || new AC(); if (L.pctx.resume) L.pctx.resume();
       try { L.ana = L.pctx.createAnalyser(); L.ana.fftSize = 512; L.ana.connect(L.pctx.destination); avC.analyser(L.ana); } catch (e) { L.ana = null; }
@@ -884,7 +894,7 @@ var RumiyoAvatar = (function () {
       else if (o.t === "in") { if (!L.curMe) L.curMe = mkBubble("me"); L.curMe.textContent += o.text; L.curAi = null; $("log").scrollTop = 1e9; }
       else if (o.t === "out") { reactFrom(o.text); if (!L.curAi) L.curAi = mkBubble("ai"); L.curAi.textContent += o.text; L.curMe = null; $("log").scrollTop = 1e9; L.outText = (L.outText || "") + o.text; var mo = moodFrom(L.outText); if (mo !== "speak") L.mood = mo; if (L.srcs.length) setAv(L.mood || "speak"); }
       else if (o.t === "int") { liveStopPlay(L); L.curAi = null; }
-      else if (o.t === "turn") { L.curMe = null; L.curAi = null; L.outText = ""; L.mood = "speak"; if (L.ptt && !L.talking) { micUI("idle"); state("Sizning navbatingiz: tugmani bosib gapiring"); } }
+      else if (o.t === "turn") { L.curMe = null; L.curAi = null; L.outText = ""; L.mood = "speak"; setTimeout(function () { micWatch(L); }, 900); if (L.ptt && !L.talking) { micUI("idle"); state("Sizning navbatingiz: tugmani bosib gapiring"); } }
       else if (o.t === "left") { setLeft(o.left); }
       else if (o.t === "lesson_btn") { showLessonBtn(); }
       else if (o.t === "later") { setTimeout(function () { liveCleanup(); finish({ later: true, cta: "Mayli, ertaga ko'rishamiz! Dars vaqti kelganda bot sizga yozadi 👋" }); }, 7000); }

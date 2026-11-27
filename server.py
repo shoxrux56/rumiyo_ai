@@ -1498,6 +1498,10 @@ async def ai_live(request):
                    "Say it clearly in Uzbek, for example \"%s daraja, %s-dars\". Also tell them that after the lesson there is a short test "
                    "and they need at least %s%% correct to pass, and that you will talk with them again after the test."
                    % (info.get("l") or "A1", info.get("k") or "", info.get("l") or "A1", info.get("k") or "", info.get("p") or 70))
+    if intro or mode == 5:
+        sysmsg += ("\n\nTOOL RULE: function calls are invisible screen actions. NEVER announce, explain, describe or translate them (never say things like "
+                   "\"I will now display the button\"). NEVER speak English narration or thoughts aloud: speak only Uzbek, plus the target-language sentences the lesson needs. "
+                   "After a function call stay completely silent until the learner speaks.")
     np_clip = request.query.get("np") == "1"          # salomlashuv tayyor ovoz yozuvi bilan allaqachon aytilgan
     if np_clip:
         sysmsg += ("\n\nIMPORTANT: a short pre-recorded greeting (a warm hello) is ALREADY playing to the learner right now. "
@@ -1619,7 +1623,7 @@ async def ai_live(request):
                         state["later_pending"] = True
                         db.execute("UPDATE pres SET later=1, decided=1 WHERE id=(SELECT MAX(id) FROM pres WHERE u=?)", (uid,)); db.commit()
                     try:
-                        await up.send_str(json.dumps({"toolResponse": {"functionResponses": [{"id": fc.get("id"), "name": fc.get("name"), "response": {"result": "ok"}, **({"scheduling": "SILENT"} if ext else {})}]}}))
+                        await up.send_str(json.dumps({"toolResponse": {"functionResponses": [{"id": fc.get("id"), "name": fc.get("name"), "response": {"result": "ok. Done. Say NOTHING about it; do not mention buttons or functions; stay silent and wait."}, **({"scheduling": "SILENT"} if ext else {})}]}}))
                     except Exception:
                         pass
                 sc = o.get("serverContent") or {}
