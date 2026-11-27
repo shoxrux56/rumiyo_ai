@@ -774,17 +774,27 @@ var RumiyoAvatar = (function () {
     if (P && P.c === "fiery") { try { rate = 1; eg.connect(velvetFx(L)); } catch (e) { rate = 1; src.playbackRate.value = 1; eg.connect(L.ana || L.pctx.destination); } }
     else eg.connect(L.ana || L.pctx.destination);
     src.start(t); L.next = t + ab.duration / rate;
+    L.aiTurn = true; L.aiT = Date.now();
     L.srcs.push(src); setAv(L.mood || "speak"); if (!L.ptt && !L.muted) micUI("wait");
     try { if (L.pctx.state === "suspended") { L.pctx.resume(); state("Ovoz chiqmasa, ekranga bir marta tegining"); } } catch (e) {}
-    src.onended = function () { var k = L.srcs.indexOf(src); if (k >= 0) L.srcs.splice(k, 1); if (!L.srcs.length) { setAv("idle"); L.quiet = Date.now() + 450; if (!L.ptt && !L.muted) { micUI("on"); state("Sizning navbatingiz: gapiravering"); } } };
+    src.onended = function () { var k = L.srcs.indexOf(src); if (k >= 0) L.srcs.splice(k, 1); if (!L.srcs.length) { L.aiT = Date.now(); setTimeout(function () { micWatch(L); }, 750); } };
   }
-  // mikrofon "ustoz gapiryapti" holatida qolib ketmasin: ovoz tugagan bo'lsa (yoki tugagani eshitilmasa) o'zi ochiladi
+  // Mikrofon Rumiyo gapirayotganda YOPIQ turadi: uning butun navbati davomida (gaplar orasidagi tanaffuslarda ham) va ovoz tugagach 0.7 soniya.
+  function micClosed(L) {
+    try {
+      if (L.aiTurn && Date.now() - (L.aiT || 0) < 15000) return true;                 // Rumiyo navbati hali tugamagan
+      if (L.pctx && L.pctx.currentTime < (L.next || 0) + 0.7) return true;             // navbatdagi ovoz hali chalinyapti yoki hozirgina tugadi
+      return Date.now() < (L.quiet || 0);
+    } catch (e) { return false; }
+  }
   function micWatch(L) {
     try {
-      if (!L || L.closed || !L.pctx) return;
+      if (!L || L.closed || !L.pctx || L.ptt || L.muted || !L.ready) return;
       var now = L.pctx.currentTime;
       if (L.srcs.length && L.next && now > L.next + 0.5) L.srcs = [];
-      if (!L.srcs.length && !L.ptt && !L.muted && ms.className === "wait") { setAv("idle"); L.quiet = Date.now() + 300; micUI("on"); state("Sizning navbatingiz: gapiravering"); }
+      var closed = micClosed(L);
+      if (closed && ms.className === "on") { micUI("wait"); }
+      else if (!closed && ms.className === "wait") { if (!L.srcs.length) setAv("idle"); micUI("on"); state("Sizning navbatingiz: gapiravering"); }
     } catch (e) {}
   }
   function liveStopPlay(L) { L.srcs.forEach(function (x) { try { x.stop(); } catch (e) {} }); L.srcs = []; L.next = 0; setAv("idle"); }
@@ -841,9 +851,10 @@ var RumiyoAvatar = (function () {
       var src = L.pctx.createBufferSource(); src.buffer = ab;
       if (P && P.c === "fiery") src.connect(velvetFx(L)); else src.connect(L.ana || L.pctx.destination);
       var t = Math.max(L.pctx.currentTime + 0.03, L.next); src.start(t); L.next = t + ab.duration;
+      L.aiTurn = true; L.aiT = Date.now();       // tayyor salomdan keyin Rumiyo yana gapiradi: shu navbat tugaguncha mikrofon yopiq
       L.srcs.push(src); setAv("speak"); if (!L.ptt && !L.muted) micUI("wait");
       aiLog({uz: String(text || "").replace(/(\S)-(?=\S)/g, "$1")});
-      src.onended = function () { var k = L.srcs.indexOf(src); if (k >= 0) L.srcs.splice(k, 1); if (!L.srcs.length) { setAv("idle"); L.quiet = Date.now() + 450; if (!L.ptt && !L.muted) { micUI("on"); state("Sizning navbatingiz: gapiravering"); } else if (L.ptt) { micUI("idle"); state("Sizning navbatingiz: tugmani bosib gapiring"); } } };
+      src.onended = function () { var k = L.srcs.indexOf(src); if (k >= 0) L.srcs.splice(k, 1); if (!L.srcs.length) { L.aiT = Date.now(); if (!L.ptt && !L.muted) setTimeout(function () { micWatch(L); }, 750); else if (L.ptt) { micUI("idle"); state("Sizning navbatingiz: tugmani bosib gapiring"); } } };
     } catch (e) { L.clipFail = true; }
   }
   function liveStart(j) {
@@ -856,7 +867,7 @@ var RumiyoAvatar = (function () {
     ws.binaryType = "arraybuffer";
     var L = live = { ws: ws, ready: false, muted: false, talking: false, ptt: true, pre: [], next: 0, srcs: [], curMe: null, curAi: null, closed: false };
     state("Ulanyapman…"); $("b-mic").disabled = true;
-    L.wd = setInterval(function () { if (L.closed) clearInterval(L.wd); else micWatch(L); }, 600);
+    L.wd = setInterval(function () { if (L.closed) clearInterval(L.wd); else micWatch(L); }, 300);
     try {
       L.pctx = window._pc || new AC(); if (L.pctx.resume) L.pctx.resume();
       try { L.ana = L.pctx.createAnalyser(); L.ana.fftSize = 512; L.ana.connect(L.pctx.destination); avC.analyser(L.ana); } catch (e) { L.ana = null; }
@@ -865,7 +876,7 @@ var RumiyoAvatar = (function () {
       L.proc = L.cin.createScriptProcessor(2048, 1, 1);
       L.proc.onaudioprocess = function (e) {
         if (!L.ready || L.muted || ws.readyState !== 1) return;
-        if (!L.ptt && (L.srcs.length || Date.now() < (L.quiet || 0))) return;   // Rumiyo gapirayotganda mikrofon eshitmaydi (eko bo'lmasin)
+        if (!L.ptt && micClosed(L)) return;   // Rumiyo gapirayotganda (va gapi tugagach ozgina vaqt) mikrofon eshitmaydi: eko bo'lmasin
         if (L.ptt && !L.talking && L.pre.length > 8) L.pre.shift();
         var f = e.inputBuffer.getChannelData(0), n = Math.floor(f.length / ratio), o = new Int16Array(n);
         if (!L.ptt || L.talking) { var sq = 0; for (var q = 0; q < f.length; q += 4) sq += f[q] * f[q]; $("b-mic").style.setProperty("--lv", Math.min(1, Math.sqrt(sq / (f.length / 4)) * 9).toFixed(2)); }
@@ -890,11 +901,11 @@ var RumiyoAvatar = (function () {
           L.pctx.decodeAudioData(buf, function (ab) { playClip(L, ab, clip.text); if (L.clipFail) bad(); }, bad);
         });
       }
-      if (o.t === "ready") { L.ready = true; L.ptt = o.ptt !== false; setLeft(o.left); $("b-mic").disabled = false; if (L.ptt) { micUI("idle"); state("Rumiyo salom beryapti… gapirmoqchi bo'lsangiz tugmani bosing"); } else { micUI("on"); state("Ovozingiz eshitilganda tugma atrofida yashil halqa chiqadi"); } }
+      if (o.t === "ready") { L.ready = true; L.ptt = o.ptt !== false; setLeft(o.left); $("b-mic").disabled = false; if (L.ptt) { micUI("idle"); state("Rumiyo salom beryapti… gapirmoqchi bo'lsangiz tugmani bosing"); } else { L.aiTurn = true; L.aiT = Date.now(); micUI("wait"); state("Rumiyo gapiryapti… u tugagach mikrofon o'zi ochiladi"); } }
       else if (o.t === "in") { if (!L.curMe) L.curMe = mkBubble("me"); L.curMe.textContent += o.text; L.curAi = null; $("log").scrollTop = 1e9; }
       else if (o.t === "out") { reactFrom(o.text); if (!L.curAi) L.curAi = mkBubble("ai"); L.curAi.textContent += o.text; L.curMe = null; $("log").scrollTop = 1e9; L.outText = (L.outText || "") + o.text; var mo = moodFrom(L.outText); if (mo !== "speak") L.mood = mo; if (L.srcs.length) setAv(L.mood || "speak"); }
-      else if (o.t === "int") { liveStopPlay(L); L.curAi = null; }
-      else if (o.t === "turn") { L.curMe = null; L.curAi = null; L.outText = ""; L.mood = "speak"; setTimeout(function () { micWatch(L); }, 900); if (L.ptt && !L.talking) { micUI("idle"); state("Sizning navbatingiz: tugmani bosib gapiring"); } }
+      else if (o.t === "int") { liveStopPlay(L); L.aiTurn = false; L.curAi = null; }
+      else if (o.t === "turn") { L.curMe = null; L.curAi = null; L.outText = ""; L.mood = "speak"; L.aiTurn = false; setTimeout(function () { micWatch(L); }, 900); if (L.ptt && !L.talking) { micUI("idle"); state("Sizning navbatingiz: tugmani bosib gapiring"); } }
       else if (o.t === "left") { setLeft(o.left); }
       else if (o.t === "lesson_btn") { showLessonBtn(); }
       else if (o.t === "later") { setTimeout(function () { liveCleanup(); finish({ later: true, cta: "Mayli, ertaga ko'rishamiz! Dars vaqti kelganda bot sizga yozadi 👋" }); }, 7000); }
