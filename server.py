@@ -480,6 +480,7 @@ ENTRY_DEFAULT = {
         "Voy-voy, o'z vaqtida kelding, barakalla! Boshladik!", "Salom! Bugun senga bitta zo'r gap o'rgataman, hayron qolasan!", "Assalom! Mikrofon ishlayaptimi? Eshityapman, davom et!",
         "Keldingmi, jonginam? Bugun mashq ham, hazil ham bo'ladi!", "Ey, salom! Kecha nimalar o'rgandik, eslayapsanmi? Hozir sinaymiz!", "Hormang! Tayyor bo'lsang, men ham tayyorman, boshladik!",
         "Qalaysan, polvon? Bugun ruscha gap otamiz!", "Voy, ovozingni eshitib quvondim! Qani, boshlaymiz!", "Salom! Mana senga yangi kun, yangi gaplar!",
+        "Salom, mening zo'r o'quvchim! Bugun yana bir qadam oldinga!", "Ey, keldingmi! Qani, bugun kim kimni yengadi, men yoki sen? Hazil, boshladik!",
     ],
     "angry": [
         "Hoy! Nihoyat keldingmi?! Kech qolding, tez o'tir!", "Yana sen?! Mayli, o'tir, ishni boshlaymiz!", "Salom! Bugun gap yodlamay kelgan bo'lsang, jahlim chiqadi, bil!",
@@ -488,6 +489,7 @@ ENTRY_DEFAULT = {
         "Bo'ldi, o'tir! Nima, yana uyquni to'ymadingmi? Boshladik!", "Voy bu bolani qarang-a, yana keldi! Ishla endi, ishla!", "Hoy! Bugun bitta xato qilsang ham eshitaman, tayyor tur!",
         "Kelding-a! Kechagi dars esingdami yoki yana oshxonaga tashlab ketdingmi?!", "Ey, tez-tez bo'l! Men seni kutib o'tirganim yo'q, ish ko'p!", "Salom! Qani, ovozingni chiqar, shamolday jim o'tirma!",
         "Nima, yana hech narsa o'qimadingmi?! Mayli, o'zim o'rgataman, lekin g'ing demay o'tir!",
+        "Qani, o'tir, gapirma ko'p! Bugun jiddiy ishlaymiz!", "Hoy, yana kechikibsan! Soatga qaramaysanmi?! Mayli, boshla!", "Ey, ovozing past, baland gapir! Eshitmayapman, ish boshladik!", "Hay-hay, keldingmi! Bugun menga yoqmasang, yana takrorlaymiz!",
     ],
     "sweet": [
         "Voy, jonim, kelding! Seni juda sog'indim, qalaysan?", "Assalom, asalim! Bugun sen bilan gaplashishni intizor kutdim!", "Salom, shirinim! Kayfiyating qanday, tabassum qilib boshlaymizmi?",
@@ -495,11 +497,13 @@ ENTRY_DEFAULT = {
         "Voy, ovozingni eshitib yuragim yayradi! Boshlaymiz, jonim!", "Assalomu alaykum, azizim! Bugun senga yoqimli yangi gaplar tayyorladim!", "Kel, kel, o'tir, mehribonim! Choy ham tayyor!",
         "Salom, to'tim! Kecha juda yaxshi ishlading, bugun ham shunday bo'ladi!", "Voy, ofarin, o'z vaqtida keldingmi! Seni maqtagim keldi!", "Hormang, jonginam! Bugun hammasi oson bo'ladi, ko'rasan!",
         "Assalom, ko'zimning nuri! Tayyor bo'lsang, nafas olib boshlaymiz!", "Salom, bolajonim! Xato qilsang ham qo'rqma, men yoningdaman!", "Voy, keldingmi, shirin so'zim! Bugun ikkalamiz zo'r ishlaymiz!",
+        "Salom, jon-jonim! Sen kelganda kun yanada chiroyli bo'ladi!", "Voy, asalim, mana keldingmi! Bugun sen uchun maxsus mashqlar bor!", "Assalom, gulchehra! Birga o'qiymiz, birga kulamiz, mayliga?", "Salom, ko'zimning oqu qorasi! Boshlaymizmi, jonim?", "Hormang-hormang! Bugun ham juda yaxshi ishlaysan, ishonaman!",
     ],
     "fiery": [
         "M-m-m... salom, jonim... keldingmi... men seni kutayotgan edim...", "Voy... keldingmi... yaqinroq o'tir... bugun sekin-sekin o'rganamiz...", "Salom, shirinim... ovozingni eshitishni juda xohlagandim... boshla...",
         "M-m-m... keldingmi, asalim... bugun dars ham, hazil ham bo'ladi... tayyormisan?", "Oh... seni ko'rib, kayfiyatim ko'tarildi... qani, pichirlab boshlaymiz...", "Salom, jonginam... bugun senga maxsus gaplar tayyorladim... eshitasanmi?",
         "Voy... kelding... yuragim hapriqdi... qani, sekin gapir...", "M-m-m... hormang... bugun hammasi mayin va oson bo'ladi... ishon menga...",
+        "Salom, jonim... keldingmi... bugun seni ko'rib quvondim...", "M-m-m... asalim... qani, yaqinroq kel, boshlaymiz...", "Voy... yana keldingmi... yuragim erib ketdi... sekin gapir...", "Oh... shirinim... bugun senga yoqimli gaplar o'rgataman...", "M-m-m... salom... men seni tinglayman... boshla, jonginam...", "Voy, ovozing... juda yoqimli... qani, davom et, jonim...", "Salom, azizim... bugun hammasi mayin... qo'rqma, men shu yerdaman...", "M-m-m... kelding-a... bugun birga sekin-sekin o'rganamiz...", "Oh... jonginam... seni kutib o'tirgan edim... boshlaymizmi...", "Voy... keldingmi... bugun senga maxsus bir narsa o'rgataman...", "Salom, shirinim... nafas ol... bugun hammasi oson bo'ladi...", "M-m-m... mana seni kutgandim... qani, pichirlab boshla...",
     ],
 }
 
