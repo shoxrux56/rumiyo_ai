@@ -444,7 +444,6 @@ var RumiyoAvatar = (function () {
       .then(function (j) {
         if (j && j.ok && j.token) {
           token = j.token; parseTI(); try { history.replaceState(null, "", location.pathname + "?t=" + encodeURIComponent(token) + location.hash); } catch (e) {}
-          if (TI.h === 4 && TI.x && TI.i) { var u = lessonUrl(); if (u) location.replace(u); }      // VIP: test tugadi, birinchi darsga to'g'ridan-to'g'ri
         }
       }).catch(function () {});
   })();
