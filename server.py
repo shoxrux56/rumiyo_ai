@@ -8,7 +8,7 @@ Hazil/pichinglar bazasi (gaplar_db.py) botdagi adminning "AI ni o'qitish" tugmas
 Kalitlar FAQAT muhit o'zgaruvchilarida (Render -> Environment), kodga yoki GitHubga yozilmaydi:
   TALK_SECRET (botdagi bilan bir xil), GROQ_API_KEYS (vergul bilan), OPENROUTER_API_KEY, GEMINI_API_KEY
 """
-import asyncio, io, wave, base64, difflib, hashlib, hmac, json, os, random, re, sqlite3, time
+import asyncio, io, wave, base64, difflib, hashlib, hmac, json, os, random, re, secrets, sqlite3, time
 from datetime import datetime, timedelta, timezone
 
 import urllib.parse
@@ -73,7 +73,21 @@ try:
     db.execute("ALTER TABLE lres ADD COLUMN w TEXT")      # testda xato qilingan gaplar (JSON ro'yxat)
 except sqlite3.OperationalError:
     pass
+db.execute("CREATE TABLE IF NOT EXISTS smeta(k TEXT PRIMARY KEY, v TEXT)")
 db.commit()
+# baza qayta yaratilsa (Render qayta ishga tushganda) epoch o'zgaradi: bot o'z "o'qilgan raqam"ini nolga qaytaradi
+_ep = db.execute("SELECT v FROM smeta WHERE k='epoch'").fetchone()
+if _ep:
+    EPOCH = _ep[0]
+else:
+    EPOCH = secrets.token_hex(6)
+    db.execute("INSERT INTO smeta(k, v) VALUES('epoch', ?)", (EPOCH,))
+    db.commit()
+
+
+def seq_of(name):
+    r = db.execute("SELECT seq FROM sqlite_sequence WHERE name=?", (name,)).fetchone()
+    return int(r[0]) if r else 0
 
 
 def today():
@@ -1719,13 +1733,22 @@ async def admin_placements(request):
         after = int(request.query.get("after", "0"))
     except ValueError:
         after = 0
+    if request.query.get("u"):
+        # bitta o'quvchining oxirgi natijasi (u «Darsni boshlash»ni bosdi: kutish yo'q, o'qilgan raqamga ham bog'liq emas)
+        try:
+            uq = int(request.query["u"])
+        except ValueError:
+            uq = 0
+        r = db.execute("SELECT id, u, level, raw, later, decided, ts FROM pres WHERE u=? ORDER BY id DESC LIMIT 1", (uq,)).fetchone()
+        out = [{"id": r[0], "u": r[1], "level": r[2], "raw": r[3], "later": r[4], "decided": r[5], "ts": r[6]}] if r else []
+        return web.json_response({"results": out, "epoch": EPOCH, "seq": seq_of("pres")})
     rows = db.execute("SELECT id, u, level, raw, later, decided, ts FROM pres WHERE id>? ORDER BY id LIMIT 50", (after,)).fetchall()
     out = []
     for a, b, c, d, e, f, ts in rows:
         if not f and ts > int(time.time()) - 360:      # o'quvchi hali "hozir yoki ertaga" demagan: 6 daqiqagacha kutamiz
             break
         out.append({"id": a, "u": b, "level": c, "raw": d, "later": e, "decided": f})
-    return web.json_response({"results": out})
+    return web.json_response({"results": out, "epoch": EPOCH, "seq": seq_of("pres")})
 
 
 async def admin_results(request):
@@ -1742,7 +1765,7 @@ async def admin_results(request):
             return json.loads(x) if x else []
         except ValueError:
             return []
-    return web.json_response({"results": [{"id": a, "u": b, "l": c, "s": d, "n": e, "w": _w(f)} for a, b, c, d, e, f in rows]})
+    return web.json_response({"results": [{"id": a, "u": b, "l": c, "s": d, "n": e, "w": _w(f)} for a, b, c, d, e, f in rows], "epoch": EPOCH, "seq": seq_of("lres")})
 
 
 # ---------- endpoints ----------
