@@ -422,7 +422,7 @@ var RumiyoAvatar = (function () {
     if (TI.h === 4 && !TI.x) return "";
     if (!TI.x || !TI.i) return "";
     var back = location.origin + location.pathname + "?t=" + token;
-    return TI.x + (TI.x.indexOf("?") < 0 ? "?" : "&") + "l=" + TI.i + "&ret=" + encodeURIComponent(back) + (location.hash || "");
+    return TI.x + (TI.x.indexOf("?") < 0 ? "?" : "&") + "l=" + TI.i + (TI.h === 6 ? "&m=test" : "") + "&ret=" + encodeURIComponent(back) + (location.hash || "");
   }
   // o'zi o'tmaydi: "Darsni boshlash" tugmasi ko'rsatiladi (pastda showLessonBtn)
   // trenerdan qaytganda natija (r) serverga yuboriladi, suhbat uchun yangi havola olinadi
@@ -433,6 +433,19 @@ var RumiyoAvatar = (function () {
       .then(function (x) { return x.json(); })
       .then(function (j) {
         if (j && j.ok && j.token) { token = j.token; parseTI(); try { history.replaceState(null, "", location.pathname + "?t=" + encodeURIComponent(token) + location.hash); } catch (e) {} }
+      }).catch(function () {});
+  })();
+  // trenerdan "Rumiyo bilan gaplashish" (talk=kun): talaffuz suhbati uchun h=6 havola olinadi
+  (function () {
+    var d = new URLSearchParams(location.search).get("talk");
+    if (!d || !token) return;
+    fetch("lesson/talk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token, d: parseInt(d, 10) }) })
+      .then(function (x) { return x.json(); })
+      .then(function (j) {
+        if (j && j.ok && j.token) {
+          token = j.token; parseTI(); try { history.replaceState(null, "", location.pathname + "?t=" + encodeURIComponent(token) + location.hash); } catch (e) {}
+          var tp = document.getElementById("h-topic"); if (tp) tp.textContent = EN ? "Now we speak today's sentences aloud and I fix your pronunciation. Allow the microphone." : "Endi bugungi gaplarni birga ovoz chiqarib aytamiz, men talaffuzingni tuzataman. Mikrofonga ruxsat bering.";
+        }
       }).catch(function () {});
   })();
   // daraja testidan qaytganda natija (pr) serverga yuboriladi, test-keyingi suhbat uchun yangi havola olinadi
@@ -693,7 +706,7 @@ var RumiyoAvatar = (function () {
   // kirish suhbatida: Rumiyo mavzuni aytgach "Darsni boshlash" tugmasi chiqadi
   function showLessonBtn() {
     if ($("lbtn")) return;
-    var b = document.createElement("a"); b.id = "lbtn"; b.className = "btn"; b.textContent = TI.h === 3 ? "📝 Testni boshlash" : "📖 Darsni boshlash";
+    var b = document.createElement("a"); b.id = "lbtn"; b.className = "btn"; b.textContent = TI.h === 3 ? "📝 Testni boshlash" : TI.h === 6 ? "📝 Testga o'tish" : "📖 Darsni boshlash";
     b.href = lessonUrl() || (botUrl.replace(/\?.*$/, "") + "?start=dars");
     b.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);z-index:30;white-space:nowrap;width:auto;padding:12px 22px;box-shadow:0 6px 24px rgba(0,0,0,.35);text-decoration:none";
     b.addEventListener("click", function (e) {
@@ -712,8 +725,8 @@ var RumiyoAvatar = (function () {
     if (j && j.bot) botUrl = j.bot;
     var lb = $("lbtn"); if (lb && lb.parentNode) lb.parentNode.removeChild(lb);
     var intro = !!(j && j.intro);
-    if (intro && TI.h !== 3) botUrl = botUrl.replace(/\?.*$/, "") + "?start=dars";
-    $("e-bot").textContent = (j && j.later) ? "Botga qaytish" : intro ? (TI.h === 3 ? "📝 Testni boshlash" : "📖 Darsni boshlash") : "Botga qaytish";
+    if (intro && TI.h !== 3 && TI.h !== 6) botUrl = botUrl.replace(/\?.*$/, "") + "?start=dars";
+    $("e-bot").textContent = (j && j.later) ? "Botga qaytish" : intro ? (TI.h === 3 ? "📝 Testni boshlash" : TI.h === 6 ? "📝 Testga o'tish" : "📖 Darsni boshlash") : "Botga qaytish";
     $("e-p").textContent = (j && j.cta) || "Botga qayting — darsni davom ettiring 👇";
     $("e-bot").href = botUrl; $("e-bot").dataset.go = "";
     if (intro && lessonUrl()) { $("e-bot").href = lessonUrl(); $("e-bot").dataset.go = "1"; }
