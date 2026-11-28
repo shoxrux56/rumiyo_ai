@@ -1607,7 +1607,7 @@ async def ai_live(request):
                    "and you will talk about the lesson sentences together, listen to their pronunciation and correct it yourself (there is no separate written test)."
                    % (info.get("l") or "A1", info.get("k") or "", info.get("l") or "A1", info.get("k") or ""))
     if mode not in (5,):
-        sysmsg += RAPPORT + hist_facts(uid)
+        sysmsg += (("" if info.get("rc") == "s" else RAPPORT)) + hist_facts(uid)
     if intro or mode in (5, 6, 8):
         sysmsg += ("\n\nTOOL RULE: function calls are invisible screen actions. NEVER announce, explain, describe or translate them (never say things like "
                    "\"I will now display the button\"). NEVER speak English narration or thoughts aloud: speak only Uzbek, plus the target-language sentences the lesson needs. "
