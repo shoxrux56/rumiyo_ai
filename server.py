@@ -2422,6 +2422,25 @@ def pron_facts(info, dinfo):
             "\n".join("%d) \"%s\" -> \"%s\"" % (i + 1, uz, ru) for i, (ru, uz) in enumerate(items)))
 
 
+async def admin_reset_user(request):
+    """Admin: bitta foydalanuvchining sayt ma'lumotlarini (ishlatish, eslatmalar, natijalar, tanlovlar) o'chiradi. {"uid": 123}"""
+    if not is_admin(request):
+        return denied()
+    try:
+        uid = int((await request.json()).get("uid"))
+    except Exception:
+        return web.json_response({"ok": False}, status=400)
+    n = 0
+    for t, col in (("use", "user_id"), ("notes", "user_id"), ("sess", "user_id"), ("pres", "u"), ("wweak", "u"),
+                   ("lres", "u"), ("ugender", "user_id"), ("upick", "user_id")):
+        try:
+            n += db.execute(f"DELETE FROM {t} WHERE {col}=?", (uid,)).rowcount
+        except Exception as e:
+            print("reset_user", t, type(e).__name__)
+    db.commit()
+    return web.json_response({"ok": True, "deleted": n})
+
+
 async def admin_voice(request):
     """Bot Rumiyo ovozida qisqa ovozli xabar (MP3) so'raydi.
     {"text": "...", "persona": "friendly"} yoki {"ctx": {...}, "text": "zaxira matn"}: ctx bo'lsa Rumiyoning o'zi vaziyatga qarab gap o'ylab topadi."""
@@ -2544,6 +2563,7 @@ def add_routes(app, prefix=""):
     app.router.add_get(p + "/admin/export", admin_export)
     app.router.add_post(p + "/admin/keys", admin_keys)
     app.router.add_post(p + "/admin/voice", admin_voice)
+    app.router.add_post(p + "/admin/reset_user", admin_reset_user)
     app.router.add_get(p + "/admin/stats", admin_stats)
     app.router.add_get(p + "/admin/selftest", admin_selftest)
     app.router.add_get(p + "/", page)
