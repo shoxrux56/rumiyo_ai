@@ -150,7 +150,7 @@ def verify(token):
 
 def vip_ok(info):
     """Suhbat faqat VIP uchun (bot havolaga "v":1 yozadi). SUHBAT_FREE=1 bo'lsa hamma uchun ochiq."""
-    return os.getenv("SUHBAT_FREE") == "1" or bool(info and (info.get("v") == 1 or info.get("h") in (3, 4)))   # h=3,4: yangi o'quvchining daraja suhbati hamma uchun ochiq
+    return os.getenv("SUHBAT_FREE") != "0" or bool(info and (info.get("v") == 1 or info.get("h") in (3, 4)))   # h=3,4: yangi o'quvchining daraja suhbati hamma uchun ochiq
 
 
 def is_admin(request):
